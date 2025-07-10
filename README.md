@@ -2,6 +2,9 @@
 A Unity AI endpoint used to communicate and produce AI responses
 
 # Quick Start
+
+Create .env file with MB_EMBED_SECRET, METABASE_KEY, and OPENAI_API_KEY
+
 ### back-end
 python -m venv venv && source venv/bin/activate
 

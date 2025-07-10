@@ -13,6 +13,7 @@ python main.py                  # starts Flask on :5000
 
 ### front-end
 cd recap
+
 npm install -g @angular/cli     # install angular CLI once
 
 npm install                     # install dependencies once

@@ -17,7 +17,7 @@ import { Turn } from './turn';
 })
 export class App {
   protected title = 'recap';
-  protected api_url = 'http://127.0.0.1:5000/api';
+  protected api_url = 'https://fluffy-goldfish-69wqj5wg6wwjhrvv4-5000.app.github.dev/api';
   protected mb_url = 'https://test-unity-reporting.apps.silver.devops.gov.bc.ca';
   question: string = "";
   loading = false;
@@ -44,7 +44,7 @@ export class App {
 
   async changeDisplay(turn: Turn, mode: string) {
     try {
-      const body = { mode: mode, card_id: turn.embed.card_id, x_field: this.embed.x_field, y_field: this.embed.y_field };
+      const body = { mode: mode, card_id: turn.embed.card_id, x_field: turn.embed.x_field, y_field: turn.embed.y_field };
       const res = await firstValueFrom(
         this.http.post<Embed>(`${this.api_url}/change_display`, body)
       );

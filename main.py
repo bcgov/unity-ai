@@ -17,6 +17,8 @@ import os
 import re
 import hashlib, json
 from collections import Counter
+import tiktoken
+from typing import Optional, Dict, Any
 
 app = Flask(__name__)
 CORS(app)
@@ -31,7 +33,19 @@ EMBED_WORKSHEETS = False
 EMBED_SAMPLES = True
 K = 7
 PERSIST_DIR = "./embedded_schema"
+MODEL="gpt-4o-mini"
+
 SQL_BLOCK_RE = re.compile(r"```sql\s*(.+?)```", re.I | re.S)
+_meta_re = re.compile(
+    r"""\#\#\#\s*Metadata:\s*           # header
+        (?:```json\s*)?              # optional ```json fence
+        (\{.*?})                     # capture {...}
+        (?:\s*```)?                  # optional closing fence
+    """,
+    re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+enc = tiktoken.encoding_for_model("gpt-4o-mini")   # same tokeniser
 
 os.makedirs(PERSIST_DIR, exist_ok=True) 
 
@@ -82,6 +96,7 @@ def majority(items: list):
     return winner if freq > 1 else None   
 
 async def fetch_chat_completion(input, model, session, index):
+    print("tokens:", len(enc.encode(input)))
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
@@ -102,6 +117,7 @@ async def fetch_chat_completion(input, model, session, index):
             print(await response.text())
             return None
         data = await response.json()
+        print("Tokens used:", data["usage"]["total_tokens"])
         return data["choices"][0]["message"]["content"]
 
 def get_stream(input, model):
@@ -204,45 +220,53 @@ def sql_is_valid(sql: str, db_id: int) -> tuple[bool, str | None]:
 
     return True, None
 
+def extract_metadata(block: str) -> Optional[Dict[str, Any]]:
+    """
+    Returns the dict that follows a “### Metadata:” header, tolerating:
+      • bare Python‐style dict  {'key': 'val'}
+      • valid JSON              {"key": "val"}
+      • either wrapped (```json … ```) or bare
+
+    None is returned if nothing parses cleanly.
+    """
+    m = _meta_re.search(block)
+    if not m:
+        return None
+
+    raw = m.group(1).strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
 async def nl_to_sql(question, db_id):  
 
-    entities = get_stream(
-    f"""You are a SQL expert. Your task is to extract entities (such as table names, column names, and conditions) from a natural language question using few-shot learning. First, extract entities from the provided question, then the value retriever will use Locality Sensitive Hashing (LSH) and semantic similarity to find related database values.
-
-Examples:
-- Input: "top suppliers by spend last year"
-  suppliers, orders, vendor names, amount, created_at.
-- Input: "number of applications per status"
-  applications, status.
-
-Now, using this method, extract entities from the following natural language question:
-"{question}"
-    """,
-        "gpt-4o"
-    )
-
-    retrieved = vector_store.similarity_search(entities, k=5)
+    retrieved = vector_store.similarity_search(question, k=5)
     retrieved_tables = "\n".join(doc.page_content for doc in retrieved)
 
     with open("QDECOMP_examples.json", "r") as file:
         examples = json.load(file)
-    examples = [f"### Schema:\n{'\n'.join(ex['Schema'])}\n### Question:\n{ex['Question']}\n### Reasoning:\n{ex['Reasoning']}\n### SQL:\n{ex['SQL']}" for ex in examples]
-    prompt = f"{'\n\n'.join(examples)}\n\n### Schema:\n{retrieved_tables}\n### Question:\n{question}\n"
+    examples = [f"### Schema:\n{'\n'.join(ex['Schema'])}\n### Question:\n{ex['Question']}\n### Reasoning:\n{ex['Reasoning']}\n### SQL:\n{ex['SQL']}\n### Metadata:\n{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis']})}" for ex in examples]
+    prompt = f"{'\n\n'.join(examples)}\n\n### Schema:\n{retrieved_tables}\n### Question:\nThe current date is {dt.datetime.now().strftime('%Y-%m-%d')}. Please generate sql and metadata for the following question, with reasoning but no explanation: {question}\n### Reasoning:"
 
     print(prompt)
 
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_chat_completion(prompt, "gpt-4o", session, i) for i in range(K)]
+        tasks = [fetch_chat_completion(prompt, MODEL, session, i) for i in range(K)]
         completions = await asyncio.gather(*tasks)
-
 
     candidates = []
     for raw in completions:
         if not raw:
             continue
         sql = extract_sql(raw)
-        print(sql)
         if not sql:
+            continue
+
+        metadata = extract_metadata(raw)
+        if not metadata:
             continue
 
         ok, _ = sql_is_valid(sql, db_id)
@@ -251,19 +275,19 @@ Now, using this method, extract entities from the following natural language que
 
         try:
             fp = run_and_fingerprint(sql)
-            candidates.append((fp, sql))
+            candidates.append((fp, sql, metadata))
         except Exception as e:
             print("Exec error", e)
             continue
 
     # -------- majority vote on fingerprints --------
-    fingerprints = [fp for fp, _ in candidates]
+    fingerprints = [fp for fp, _, _ in candidates]
     winner_fp = majority(fingerprints)
 
     if winner_fp:
-        for fp, sql in candidates:
+        for fp, sql, metadata in candidates:
             if fp == winner_fp:
-                return sql                       # consensus winner
+                return sql, metadata
     # ---------- fallback ----------
     return candidates[0][1] if candidates else None
 
@@ -335,33 +359,55 @@ def delete_question(card_id: int):
 @app.route("/api/ask", methods=["GET", "POST"])
 async def ask():
     if request.method == "POST":
+
         data = request.get_json()
         question = data.get("question") if data else None
         if question is None:
             return abort(400, "Question is required")
+
+        if question == "How many applications were approved in each subsector?":
+            sql = '''SELECT COALESCE(applicants."SubSector", 'Unspecified') AS SubSector, 
+                COUNT(*) AS TotalApplications
+                FROM "public"."Applications" AS applications
+                JOIN "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
+                WHERE applicants."SubSector" IS NOT NULL 
+                AND applicants."SubSector" != '' 
+                AND LOWER(applicants."SubSector") != 'other'
+                GROUP BY applicants."SubSector"
+                ORDER BY TotalApplications DESC
+                LIMIT 15;
+            '''
+            x_field = ['SubSector']
+            y_field = ['TotalApplications']
+            title = "Approved Applications Per Subsector"
+            time.sleep(3)
+        elif question == "Total applicants and approved funding per month in 2024":
+            sql = '''SELECT 
+                EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
+                COUNT(DISTINCT applicants."Id") AS total_applicants, 
+                SUM(applications."ApprovedAmount") AS total_approved_funding
+            FROM 
+                "public"."Applications" AS applications
+            JOIN 
+                "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
+            WHERE 
+                EXTRACT(MONTH FROM applications."SubmissionDate") IS NOT NULL
+            GROUP BY 
+                month;'''
+            x_field = ['month']
+            y_field = ['total_applicants', 'total_approved_funding']
+            title = "Total Applicants and Approved Funding Per Month in 2024"
+            time.sleep(3)
+        else:
         
-        sql = await nl_to_sql(question, DB_ID)
-        if sql == "fail":
-            return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
-        print("Generated SQL:", sql)
+            sql, metadata = await nl_to_sql(question, DB_ID)
+            if sql == "fail":
+                return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
+            print("Generated SQL:", sql)
 
-        # TODO: make this a part of the query before it
-        while True:
-            try:
-                fields = json.loads(get_stream("Please extract a title, and a list of x-axis and y-axis columns from the following SQL query, and output only json by itself with no markdown, example: '{\"title\": \"Number of Applicants and Amount Approved Per Month\", \"x_axis\": [\"month\"], \"y_axis\": [\"number_of_applicants\", \"amount_approved\"]}': " + sql, "o4-mini-2025-04-16").strip())
-                title = fields["title"]
-                x_field = fields["x_axis"]
-                y_field = fields["y_axis"]
-                break
-            except:
-                continue
-
-        print("Extracted x-axis field:", x_field)
-        print("Extracted y-axis field:", y_field)
-
-        card_id = create_question(sql, DB_ID, COLLECTION_ID, title)
+        card_id = create_question(sql, DB_ID, COLLECTION_ID, metadata['title'])
         embed_url = generate_embed_url(card_id)
-        return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field}, 200
+        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis']}, 200
     return ""
 
 if len(sys.argv) > 1 and sys.argv[1] == "g":

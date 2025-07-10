@@ -1,0 +1,36 @@
+<div class="container">
+
+  <div *ngFor="let turn of conversation" class="turn">
+    <div class="bubble user">
+      {{ turn.question }}
+    </div>
+
+    <div class="bubble bot">
+      <div *ngIf="turn.safeUrl == 'loading'" class="spinner"></div>
+      <div *ngIf="turn.safeUrl == 'failure'">Failure</div>
+      <div *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' ">
+        <div class="toolbar top">
+          <button (click)="changeDisplay(turn, 'pie')">Pie</button>
+          <button (click)="changeDisplay(turn, 'bar')">Bar</button>
+          <button (click)="changeDisplay(turn, 'line')">Line</button>
+          <button (click)="changeDisplay(turn, 'table')">Table</button>
+        </div>
+
+        <iframe [src]="turn.safeUrl" allowtransparency="true"></iframe>
+
+        <div class="toolbar bottom">
+          <button (click)="redirectToMB(turn)">View in Metabase</button>
+          <button (click)="deleteQuestion(turn)">Delete Card</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ask-row">
+    <input type="text"
+           [(ngModel)]="question"
+           placeholder="Ask a question"
+           (keyup.enter)="askQuestion()" />
+    <button (click)="askQuestion()">Ask</button>
+  </div>
+</div>

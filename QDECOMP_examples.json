@@ -1,0 +1,77 @@
+[
+  {
+    "Schema": [
+      "Applications(Id, RegionalDistrict, ApplicationStatusId, ApprovedAmount)",
+      "ApplicationStatuses(Id, ExternalStatus)"
+    ],
+    "Question": "What is the total approved amount per regional district for approved applications?",
+    "Reasoning": "Join Applications with ApplicationStatuses on ApplicationStatusId. Filter where ExternalStatus is 'Approved'. Group by RegionalDistrict and sum ApprovedAmount.",
+    "SQL": "SELECT a.\"RegionalDistrict\", SUM(a.\"ApprovedAmount\") AS total_approved FROM \"public\".\"Applications\" AS a JOIN \"public\".\"ApplicationStatuses\" AS s ON a.\"ApplicationStatusId\" = s.\"Id\" WHERE s.\"ExternalStatus\" = 'Approved' GROUP BY a.\"RegionalDistrict\";",
+    "title": "Total Approved Amount per Regional District",
+    "x_axis": ["RegionalDistrict"],
+    "y_axis": ["total_approved"]
+  },
+  {
+    "Schema": ["Applications(Id, SubmissionDate)"],
+    "Question": "How many applications were submitted in each month?",
+    "Reasoning": "Extract the month from SubmissionDate, group by that value, and count the number of applications.",
+    "SQL": "SELECT EXTRACT(MONTH FROM \"SubmissionDate\") AS month, COUNT(*) FROM \"public\".\"Applications\" GROUP BY month;",
+    "title": "Applications Submitted Per Month",
+    "x_axis": ["month"],
+    "y_axis": ["count"]
+  },
+  {
+    "Schema": ["Assessments(Id, ApplicationId, Status)", "Applications(Id)"],
+    "Question": "How many assessments exist for each status?",
+    "Reasoning": "Group the Assessments table by Status and count the number of rows in each group.",
+    "SQL": "SELECT \"Status\", COUNT(*) FROM \"public\".\"Assessments\" GROUP BY \"Status\";",
+    "title": "Number of Assessments by Status",
+    "x_axis": ["Status"],
+    "y_axis": ["count"]
+  },
+  {
+    "Schema": ["Applicants(Id, Sector)", "Applications(Id, ApplicantId)"],
+    "Question": "How many applications were submitted by applicants in each sector?",
+    "Reasoning": "Join Applications and Applicants on ApplicantId. Group by Sector and count the applications.",
+    "SQL": "SELECT ap.\"Sector\", COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"Applicants\" AS ap ON a.\"ApplicantId\" = ap.\"Id\" GROUP BY ap.\"Sector\";",
+    "title": "Applications by Sector",
+    "x_axis": ["Sector"],
+    "y_axis": ["application_count"]
+  },
+  {
+    "Schema": ["Applications(Id, ApprovedAmount, ProjectEndDate)"],
+    "Question": "What is the average approved amount for projects ending in 2024?",
+    "Reasoning": "Filter Applications where the year of ProjectEndDate is 2024. Compute the average ApprovedAmount.",
+    "SQL": "SELECT AVG(\"ApprovedAmount\") FROM \"public\".\"Applications\" WHERE EXTRACT(YEAR FROM \"ProjectEndDate\") = 2024;",
+    "title": "Average Approved Amount for Projects Ending in 2024",
+    "x_axis": [],
+    "y_axis": ["average_approved_amount"]
+  },
+  {
+    "Schema": ["Applications(Id, ApplicationStatusId)", "ApplicationStatuses(Id, ExternalStatus)"],
+    "Question": "List all external application statuses and how many applications have each.",
+    "Reasoning": "Join Applications and ApplicationStatuses on ApplicationStatusId. Group by ExternalStatus and count applications.",
+    "SQL": "SELECT s.\"ExternalStatus\", COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"ApplicationStatuses\" AS s ON a.\"ApplicationStatusId\" = s.\"Id\" GROUP BY s.\"ExternalStatus\";",
+    "title": "Application Counts by External Status",
+    "x_axis": ["ExternalStatus"],
+    "y_axis": ["application_count"]
+  },
+  {
+    "Schema": ["Applicants(Id, IndigenousOrgInd)", "Applications(Id, ApplicantId)"],
+    "Question": "How many applications were submitted by Indigenous organizations?",
+    "Reasoning": "Join Applications and Applicants on ApplicantId. Filter where IndigenousOrgInd is 'Yes'. Count the result.",
+    "SQL": "SELECT COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"Applicants\" AS ap ON a.\"ApplicantId\" = ap.\"Id\" WHERE ap.\"IndigenousOrgInd\" = 'Yes';",
+    "title": "Applications by Indigenous Organizations",
+    "x_axis": [],
+    "y_axis": ["application_count"]
+  },
+  {
+    "Schema": ["Applications(Id, City, RequestedAmount)"],
+    "Question": "What is the total requested amount by city?",
+    "Reasoning": "Group the Applications table by City and compute the sum of RequestedAmount.",
+    "SQL": "SELECT \"City\", SUM(\"RequestedAmount\") AS total_requested FROM \"public\".\"Applications\" GROUP BY \"City\";",
+    "title": "Total Requested Amount by City",
+    "x_axis": ["City"],
+    "y_axis": ["total_requested"]
+  }
+]

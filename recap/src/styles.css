@@ -1,0 +1,12 @@
+/* You can add global styles to this file, and also import other style files */
+:root {
+  --mb-blue-600: #1292e2;
+  --mb-blue-700: #0a7aca;
+  --mb-teal-600: #0096c7;
+  --mb-gray-050: #f7f9fb;
+  --mb-gray-200: #dfe4ea;
+  --mb-gray-400: #9aa5b1;
+  --mb-radius: 6px;
+  --mb-font-stack: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --mb-shadow-sm: 0 1px 3px rgba(16, 32, 64, 0.08);
+}

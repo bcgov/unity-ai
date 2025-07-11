@@ -1,3 +1,8 @@
+<div class="header">
+    <button (click)="resetConversation()">Reset Conversation</button>
+    <img src="logo.svg" alt="Unity Logo" class="logo"/>
+  </div>
+
 <div class="container">
 
   <div *ngFor="let turn of conversation" class="turn">
@@ -6,10 +11,11 @@
     </div>
 
     <div class="bubble bot">
-      <div *ngIf="turn.safeUrl == 'loading'" class="spinner"></div>
+      <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div>
       <div *ngIf="turn.safeUrl == 'failure'">Failure</div>
       <div *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' ">
         <div class="toolbar top">
+          <button (click)="changeDisplay(turn, 'map')">Map</button>
           <button (click)="changeDisplay(turn, 'pie')">Pie</button>
           <button (click)="changeDisplay(turn, 'bar')">Bar</button>
           <button (click)="changeDisplay(turn, 'line')">Line</button>

@@ -20,10 +20,6 @@ export class App {
   protected api_url = 'https://fluffy-goldfish-69wqj5wg6wwjhrvv4-5000.app.github.dev/api';
   protected mb_url = 'https://test-unity-reporting.apps.silver.devops.gov.bc.ca';
   question: string = "";
-  loading = false;
-  embed: Embed = {"url": "", "card_id": 0, "x_field": "", "y_field": ""};
-  safeEmbedUrl: SafeResourceUrl | null = null;
-  failure = false;
   conversation: Turn[] = [];
 
   constructor(
@@ -55,16 +51,19 @@ export class App {
     }
   }
 
+  async resetConversation() {
+    this.conversation = [];
+  }
+
   async askQuestion() {
     if (this.question.trim() === "") {
       alert("Please enter a question.");
       return;
     }
-    const turn = {question: this.question.trim(), embed: this.embed, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl}
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl}
     this.conversation.push(turn)
     // Logic to handle the question can be added here
     console.log("Question asked:", this.question);
-    this.safeEmbedUrl = null;
     this.question = "";
     try {
       const body = { question: turn.question };

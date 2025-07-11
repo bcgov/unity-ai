@@ -1,18 +1,15 @@
 /* ---------- basics ---------- */
-body {
-  margin: 0;
-  background: var(--mb-gray-050);
-  font-family: var(--mb-font-stack);
-  color: #273142;
-}
+
 .container {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 32px 16px 120px; /* increased bottom padding to accommodate fixed ask-row */
+  padding: 0px 120px; /* increased bottom padding to accommodate fixed ask-row */
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
+
+
 
 /* ---------- chat row ---------- */
 .turn {
@@ -28,6 +25,7 @@ body {
   font-size: 15px;
   box-shadow: var(--mb-shadow-sm);
   border: 1px solid var(--mb-gray-200);
+  background: #fff;
 }
 .bubble.user {
   align-self: flex-end;
@@ -36,9 +34,13 @@ body {
 }
 .bubble.bot {
   width: 80%;
+  height: 65vh;
+  position: relative;
+}
+.bubble.bot > div:not(.spinner-center) {
   height: 100%;
   align-self: flex-start;
-  background: #fff;
+  height: 65vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -47,7 +49,7 @@ body {
 /* embedded card */
 .bubble.bot iframe {
   width: 100%;
-  height: 55vh;
+  height: 100%;
   border: none;
   border-radius: 8px;
 }
@@ -122,8 +124,18 @@ body {
 }
 
 /* ---------- spinner & error ---------- */
+/* Centering wrapper */
+.spinner-center {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Only spinning, no centering */
 .spinner {
-  margin: 0 auto;
   border: 6px solid #f3f3f3;
   border-top: 6px solid var(--mb-blue-600);
   border-radius: 50%;
@@ -131,7 +143,10 @@ body {
   height: 42px;
   animation: spin 1s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .error-msg {
   color: var(--mb-red-700);

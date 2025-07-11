@@ -10,3 +10,38 @@
   --mb-font-stack: "Inter", "Helvetica Neue", Arial, sans-serif;
   --mb-shadow-sm: 0 1px 3px rgba(16, 32, 64, 0.08);
 }
+
+body {
+  margin: 0;
+  background: var(--mb-gray-050);
+  font-family: var(--mb-font-stack);
+  color: #273142;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--mb-gray-200);
+  padding-left: 50px;
+  padding-right: 50px;
+}
+.header button {
+  background: var(--mb-blue-600);
+  color: #fff;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--mb-radius);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .12s, box-shadow .12s;
+}
+.header button:hover {
+  background: var(--mb-blue-700);
+  box-shadow: var(--mb-shadow-sm);
+}
+.header img.logo {
+  height: 70px;
+  width: auto;
+}

@@ -340,7 +340,8 @@ def change_display():
             json={"display": mode,
                 "visualization_settings": {
                     "graph.dimensions": x_field,
-                    "graph.metrics": y_field
+                    "graph.metrics": y_field,
+                    "map.region": "1c5d50ee-4389-4593-37c1-fa8d4687ff4c"
                 }
             })
         if r2.status_code != 200:
@@ -377,9 +378,11 @@ async def ask():
                 ORDER BY TotalApplications DESC
                 LIMIT 15;
             '''
-            x_field = ['SubSector']
-            y_field = ['TotalApplications']
-            title = "Approved Applications Per Subsector"
+            metadata = {
+                "title": "Approved Applications Per Subsector",
+                "x_axis": ['SubSector'],
+                "y_axis": ['TotalApplications']
+            }
             time.sleep(3)
         elif question == "Total applicants and approved funding per month in 2024":
             sql = '''SELECT 
@@ -394,10 +397,38 @@ async def ask():
                 EXTRACT(MONTH FROM applications."SubmissionDate") IS NOT NULL
             GROUP BY 
                 month;'''
-            x_field = ['month']
-            y_field = ['total_applicants', 'total_approved_funding']
-            title = "Total Applicants and Approved Funding Per Month in 2024"
+            metadata = {
+                "title": "Total Applicants and Approved Funding Per Month in 2024",
+                "x_axis": ["month"],
+                "y_axis": ["total_applicants", "total_approved_funding"]
+            }
             time.sleep(3)
+
+        elif question == "Approved amount per regional district":
+            sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
+                SUM("public"."Applications"."ApprovedAmount") AS "sum"
+                FROM
+                "public"."Applications"
+                
+                LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+                WHERE
+                "ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+                AND
+                "public"."Applications"."RegionalDistrict" IS NOT NULL
+                AND
+                "public"."Applications"."RegionalDistrict" != ''
+                GROUP BY
+                "public"."Applications"."RegionalDistrict"
+                ORDER BY
+                "public"."Applications"."RegionalDistrict" ASC
+            '''
+            metadata = {
+                "title": "Approved Amount per Regional District",
+                "x_axis": ["RegionalDistrict"],
+                "y_axis": ["sum"]
+            }
+            time.sleep(3)
+
         else:
         
             sql, metadata = await nl_to_sql(question, DB_ID)

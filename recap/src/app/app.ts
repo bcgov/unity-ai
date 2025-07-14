@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ViewChild, ElementRef, NgZone } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Injectable } from '@angular/core';
 import { HttpHeaders, HttpClient } from '@angular/common/http';
@@ -26,6 +26,20 @@ export class App {
     private http: HttpClient,
     private sanitizer: DomSanitizer
   ) {}
+
+  @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
+
+  private scrollToBottom(): void {
+    // Wait until the DOM update that adds the message is done
+    setTimeout(() => {
+      if (this.scrollBox) {
+        this.scrollBox.nativeElement.scroll({
+          top:  this.scrollBox.nativeElement.scrollHeight,
+          behavior: 'smooth'          // ↳ animated; drop for instant jump
+        });
+      }
+    }, 0);
+  }
 
   async redirectToMB(turn: Turn) {
     return window.location.href = `${this.mb_url}/question/${turn.embed.card_id}`;
@@ -62,6 +76,7 @@ export class App {
     }
     const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl}
     this.conversation.push(turn)
+    this.scrollToBottom();   
     // Logic to handle the question can be added here
     console.log("Question asked:", this.question);
     this.question = "";

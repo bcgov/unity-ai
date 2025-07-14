@@ -384,7 +384,7 @@ async def ask():
                 "y_axis": ['TotalApplications']
             }
             time.sleep(3)
-        elif question == "Total applicants and approved funding per month in 2024":
+        elif question == "Total applicants and approved funding per month last year":
             sql = '''SELECT 
                 EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
                 COUNT(DISTINCT applicants."Id") AS total_applicants, 
@@ -424,6 +424,33 @@ async def ask():
             '''
             metadata = {
                 "title": "Approved Amount per Regional District",
+                "x_axis": ["RegionalDistrict"],
+                "y_axis": ["sum"]
+            }
+            time.sleep(3)
+
+        elif question == "Now make it only for 2024 Q3":
+            sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
+                SUM("public"."Applications"."ApprovedAmount") AS "sum"
+                FROM
+                "public"."Applications"
+                
+                LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+                WHERE
+                "ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+                AND
+                "public"."Applications"."RegionalDistrict" IS NOT NULL
+                AND
+                "public"."Applications"."RegionalDistrict" != ''
+                AND "public"."Applications"."SubmissionDate" >= '2024-07-01'
+                AND "public"."Applications"."SubmissionDate" <= '2024-09-30'    
+                GROUP BY
+                "public"."Applications"."RegionalDistrict"
+                ORDER BY
+                "public"."Applications"."RegionalDistrict" ASC
+            '''
+            metadata = {
+                "title": "Approved Amount per Regional District - 2024 Q3",
                 "x_axis": ["RegionalDistrict"],
                 "y_axis": ["sum"]
             }

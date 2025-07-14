@@ -7,26 +7,37 @@
   --mb-gray-200: #dfe4ea;
   --mb-gray-400: #9aa5b1;
   --mb-radius: 6px;
-  --mb-font-stack: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --mb-font-stack:"BC Sans","Noto Sans","Helvetica Neue",Arial,sans-serif !important;
   --mb-shadow-sm: 0 1px 3px rgba(16, 32, 64, 0.08);
 }
 
 body {
   margin: 0;
+  margin-top: 100px;
   background: var(--mb-gray-050);
-  font-family: var(--mb-font-stack);
+  font-family: var(--mb-font-stack) !important; 
   color: #273142;
+}
+
+button, input {
+  font-family: var(--mb-font-stack) !important;
 }
 
 .header {
   display: flex;
+  position: fixed;
+  box-sizing: border-box;   /* include padding in width calc */
+  z-index: 200;
+  background: white;
+  top: 0;
+  width: 100vw;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
   border-bottom: 1px solid var(--mb-gray-200);
   padding-left: 50px;
   padding-right: 50px;
 }
+.header{ background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.06);}
 .header button {
   background: var(--mb-blue-600);
   color: #fff;

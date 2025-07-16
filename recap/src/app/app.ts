@@ -1,6 +1,4 @@
 import { Component, ViewChild, ElementRef, NgZone } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { Injectable } from '@angular/core';
 import { HttpHeaders, HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
@@ -9,10 +7,9 @@ import { CommonModule } from '@angular/common';
 import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlLoaderComponent } from './sql-loader/sql-loader';
-
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, FormsModule, SqlLoaderComponent],
+  imports: [CommonModule, FormsModule, SqlLoaderComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -29,6 +26,7 @@ export class App {
   ) {}
 
   @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
+  @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
 
   private scrollToBottom(): void {
     // Wait until the DOM update that adds the message is done
@@ -40,6 +38,12 @@ export class App {
         });
       }
     }, 0);
+  }
+
+  scrollSqlToBottom(): void {
+    if (this.sqlAnimationContainer) {
+      this.sqlAnimationContainer.nativeElement.scrollTop = this.sqlAnimationContainer.nativeElement.scrollHeight;
+    }
   }
 
   // In your component class, add a method:

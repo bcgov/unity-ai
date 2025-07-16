@@ -1,15 +1,17 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 
 @Component({
   selector: 'sql-loader',
   template: `
-    <div class="sql-loader">
+    <div class="sql-loader" #sqlContainer>
       <pre>{{displayedText}}</pre>
     </div>
   `,
   styleUrls: ['./sql-loader.css']
 })
-export class SqlLoaderComponent implements OnInit {
+export class SqlLoaderComponent implements OnInit, AfterViewInit {
+  @ViewChild('sqlContainer') sqlContainer!: ElementRef;
+  @Input() parentScrollFn!: () => void;
   @Input() segments: string[] = [
 `SELECT
   a."RegionalDistrict",
@@ -77,27 +79,53 @@ ORDER BY total_requested DESC`
   private segmentIndex = 0;
   private charIndex = 0;
   private typingInterval: any;
+  private shuffledSegments: string[] = [];
 
   ngOnInit() {
+    this.displayedText = '';
+    this.shuffleSegments();
     setTimeout(() => this.startTyping(), 700);
   }
 
+  private shuffleSegments() {
+    this.shuffledSegments = [...this.segments];
+    for (let i = this.shuffledSegments.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.shuffledSegments[i], this.shuffledSegments[j]] = [this.shuffledSegments[j], this.shuffledSegments[i]];
+    }
+  }
+
+  ngAfterViewInit() {
+    // Initial scroll setup
+  }
+
+  private scrollToBottom() {
+    if (this.parentScrollFn) {
+      this.parentScrollFn();
+    }
+  }
+
   startTyping() {
-    this.displayedText = '';
     this.charIndex = 0;
     this.typingInterval = setInterval(() => {
-      const currentSegment = this.segments[this.segmentIndex];
+      const currentSegment = this.shuffledSegments[this.segmentIndex];
       if (this.charIndex < currentSegment.length) {
         this.displayedText += currentSegment[this.charIndex];
         this.charIndex++;
+        // Auto-scroll as new characters are added
+        setTimeout(() => this.scrollToBottom(), 0);
       } else {
         setTimeout(() => {
-          this.segmentIndex = (this.segmentIndex + 1) % this.segments.length;
-          this.displayedText = '';
+          this.segmentIndex = (this.segmentIndex + 1) % this.shuffledSegments.length;
+          // Reshuffle when we've gone through all segments
+          if (this.segmentIndex === 0) {
+            this.shuffleSegments();
+          }
+          this.displayedText += '\n\n';
           this.charIndex = 0;
-        }, 900);
+        }, 0);
         clearInterval(this.typingInterval);
-        setTimeout(() => this.startTyping(), 900);
+        setTimeout(() => this.startTyping(), 0);
       }
     }, 10); // Typing speed
   }

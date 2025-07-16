@@ -13,8 +13,17 @@
     <div class="bubble bot">
       <!-- <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div> -->
       <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
-        <div class="loader-header">Generating SQL...</div>
-        <sql-loader></sql-loader>
+        <div class="sql-animation-container" #sqlAnimationContainer>
+          <sql-loader [parentScrollFn]="scrollSqlToBottom.bind(this)"></sql-loader>
+        </div>
+        <div class="loading-animation-overlay">
+          <div class="loading-dots">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+          </div>
+          <div class="loading-text">Generating Report...</div>
+        </div>
       </div>
       <div *ngIf="turn.safeUrl == 'failure'">Failure</div>
       <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">

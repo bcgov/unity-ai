@@ -8,10 +8,11 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { CommonModule } from '@angular/common';
 import { Embed } from './embed';
 import { Turn } from './turn';
+import { SqlLoaderComponent } from './sql-loader/sql-loader';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, FormsModule],
+  imports: [CommonModule, RouterOutlet, FormsModule, SqlLoaderComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -41,6 +42,15 @@ export class App {
     }, 0);
   }
 
+  // In your component class, add a method:
+  onIframeLoad(turn: any) {
+    console.log('Iframe loaded:', turn.embed.card_id);
+    setTimeout(() => {
+      turn.iframeLoaded = true;
+    }, 1000);
+    // turn.iframeLoaded = true;
+  }
+
   async redirectToMB(turn: Turn) {
     return window.location.href = `${this.mb_url}/question/${turn.embed.card_id}`;
   }
@@ -59,7 +69,7 @@ export class App {
         this.http.post<Embed>(`${this.api_url}/change_display`, body)
       );
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(res.url + '&cb=' + Date.now());
-      turn.embed = res;
+      // turn.embed = res;
     } catch (error) {
       console.error(error);
     }
@@ -74,8 +84,8 @@ export class App {
       alert("Please enter a question.");
       return;
     }
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl}
-    this.conversation.push(turn)
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "visualization_options": []}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false} as Turn;
+    this.conversation.push(turn);
     this.scrollToBottom();   
     // Logic to handle the question can be added here
     console.log("Question asked:", this.question);
@@ -89,6 +99,7 @@ export class App {
           })
         })
       );
+      console.log(turn.embed);
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
     } catch (error) {
       console.error(error);

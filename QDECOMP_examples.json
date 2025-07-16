@@ -9,7 +9,8 @@
     "SQL": "SELECT a.\"RegionalDistrict\", SUM(a.\"ApprovedAmount\") AS total_approved FROM \"public\".\"Applications\" AS a JOIN \"public\".\"ApplicationStatuses\" AS s ON a.\"ApplicationStatusId\" = s.\"Id\" WHERE s.\"ExternalStatus\" = 'Approved' GROUP BY a.\"RegionalDistrict\";",
     "title": "Total Approved Amount per Regional District",
     "x_axis": ["RegionalDistrict"],
-    "y_axis": ["total_approved"]
+    "y_axis": ["total_approved"],
+    "visualization_options": ["bar", "pie", "map"]
   },
   {
     "Schema": ["Applications(Id, SubmissionDate)"],
@@ -18,7 +19,8 @@
     "SQL": "SELECT EXTRACT(MONTH FROM \"SubmissionDate\") AS month, COUNT(*) FROM \"public\".\"Applications\" GROUP BY month;",
     "title": "Applications Submitted Per Month",
     "x_axis": ["month"],
-    "y_axis": ["count"]
+    "y_axis": ["count"],
+    "visualization_options": ["bar", "line", "pie"]
   },
   {
     "Schema": ["Assessments(Id, ApplicationId, Status)", "Applications(Id)"],
@@ -27,7 +29,8 @@
     "SQL": "SELECT \"Status\", COUNT(*) FROM \"public\".\"Assessments\" GROUP BY \"Status\";",
     "title": "Number of Assessments by Status",
     "x_axis": ["Status"],
-    "y_axis": ["count"]
+    "y_axis": ["count"],
+    "visualization_options": ["bar", "pie"]
   },
   {
     "Schema": ["Applicants(Id, Sector)", "Applications(Id, ApplicantId)"],
@@ -36,7 +39,8 @@
     "SQL": "SELECT ap.\"Sector\", COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"Applicants\" AS ap ON a.\"ApplicantId\" = ap.\"Id\" GROUP BY ap.\"Sector\";",
     "title": "Applications by Sector",
     "x_axis": ["Sector"],
-    "y_axis": ["application_count"]
+    "y_axis": ["application_count"],
+    "visualization_options": ["bar", "pie"]
   },
   {
     "Schema": ["Applications(Id, ApprovedAmount, ProjectEndDate)"],
@@ -45,7 +49,8 @@
     "SQL": "SELECT AVG(\"ApprovedAmount\") FROM \"public\".\"Applications\" WHERE EXTRACT(YEAR FROM \"ProjectEndDate\") = 2024;",
     "title": "Average Approved Amount for Projects Ending in 2024",
     "x_axis": [],
-    "y_axis": ["average_approved_amount"]
+    "y_axis": ["average_approved_amount"],
+    "visualization_options": ["number"]
   },
   {
     "Schema": ["Applications(Id, ApplicationStatusId)", "ApplicationStatuses(Id, ExternalStatus)"],
@@ -54,7 +59,8 @@
     "SQL": "SELECT s.\"ExternalStatus\", COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"ApplicationStatuses\" AS s ON a.\"ApplicationStatusId\" = s.\"Id\" GROUP BY s.\"ExternalStatus\";",
     "title": "Application Counts by External Status",
     "x_axis": ["ExternalStatus"],
-    "y_axis": ["application_count"]
+    "y_axis": ["application_count"],
+    "visualization_options": ["bar", "pie"]
   },
   {
     "Schema": ["Applicants(Id, IndigenousOrgInd)", "Applications(Id, ApplicantId)"],
@@ -63,7 +69,8 @@
     "SQL": "SELECT COUNT(*) FROM \"public\".\"Applications\" AS a JOIN \"public\".\"Applicants\" AS ap ON a.\"ApplicantId\" = ap.\"Id\" WHERE ap.\"IndigenousOrgInd\" = 'Yes';",
     "title": "Applications by Indigenous Organizations",
     "x_axis": [],
-    "y_axis": ["application_count"]
+    "y_axis": ["application_count"],
+    "visualization_options": ["number"]
   },
   {
     "Schema": ["Applications(Id, City, RequestedAmount)"],
@@ -72,6 +79,7 @@
     "SQL": "SELECT \"City\", SUM(\"RequestedAmount\") AS total_requested FROM \"public\".\"Applications\" GROUP BY \"City\";",
     "title": "Total Requested Amount by City",
     "x_axis": ["City"],
-    "y_axis": ["total_requested"]
+    "y_axis": ["total_requested"],
+    "visualization_options": ["bar", "pie"]
   }
 ]

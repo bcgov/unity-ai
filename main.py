@@ -71,8 +71,15 @@ def get_sql(sql):
     return r.json()["data"]
 
 def extract_sql(text: str) -> str | None:
+    # Try code fence first
     m = SQL_BLOCK_RE.search(text)
-    return m.group(1).strip() if m else None
+    if m:
+        return m.group(1).strip()
+    # Fallback: look for '### SQL:' header
+    sql_header = re.search(r"### SQL:\s*([\s\S]+?)(?:\n###|\Z)", text)
+    if sql_header:
+        return sql_header.group(1).strip()
+    return None
 
 def run_and_fingerprint(sql: str) -> tuple[str, tuple[str, ...], str]:
     """
@@ -118,6 +125,7 @@ async def fetch_chat_completion(input, model, session, index):
             return None
         data = await response.json()
         print("Tokens used:", data["usage"]["total_tokens"])
+        # print(data["choices"][0]["message"]["content"])
         return data["choices"][0]["message"]["content"]
 
 def get_stream(input, model):
@@ -248,7 +256,7 @@ async def nl_to_sql(question, db_id):
 
     with open("QDECOMP_examples.json", "r") as file:
         examples = json.load(file)
-    examples = [f"### Schema:\n{'\n'.join(ex['Schema'])}\n### Question:\n{ex['Question']}\n### Reasoning:\n{ex['Reasoning']}\n### SQL:\n{ex['SQL']}\n### Metadata:\n{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis']})}" for ex in examples]
+    examples = [f"### Schema:\n{'\n'.join(ex['Schema'])}\n### Question:\n{ex['Question']}\n### Reasoning:\n{ex['Reasoning']}\n### SQL:\n{ex['SQL']}\n### Metadata:\n{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis'], 'visualization_options': ex['visualization_options']})}" for ex in examples]
     prompt = f"{'\n\n'.join(examples)}\n\n### Schema:\n{retrieved_tables}\n### Question:\nThe current date is {dt.datetime.now().strftime('%Y-%m-%d')}. Please generate sql and metadata for the following question, with reasoning but no explanation: {question}\n### Reasoning:"
 
     print(prompt)
@@ -256,6 +264,7 @@ async def nl_to_sql(question, db_id):
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_chat_completion(prompt, MODEL, session, i) for i in range(K)]
         completions = await asyncio.gather(*tasks)
+    # completions = [get_stream(prompt, MODEL)]
 
     candidates = []
     for raw in completions:
@@ -263,18 +272,24 @@ async def nl_to_sql(question, db_id):
             continue
         sql = extract_sql(raw)
         if not sql:
+            print("No SQL found in completion:", raw)
             continue
 
         metadata = extract_metadata(raw)
         if not metadata:
+            print("No metadata found in completion:", raw)
             continue
 
         ok, _ = sql_is_valid(sql, db_id)
         if not ok:
+            print("SQL is not valid:", sql)
             continue
 
         try:
             fp = run_and_fingerprint(sql)
+            if not fp:
+                print("No fingerprint returned for SQL:", sql)
+                continue
             candidates.append((fp, sql, metadata))
         except Exception as e:
             print("Exec error", e)
@@ -289,7 +304,11 @@ async def nl_to_sql(question, db_id):
             if fp == winner_fp:
                 return sql, metadata
     # ---------- fallback ----------
-    return candidates[0][1] if candidates else None
+    if candidates:
+        return candidates[0][1]
+    else:
+        print("raw candidates:", completions)
+        print("parsed candidates:", candidates)
 
 def create_question(sql: str, db_id: int, collection_id: int, name: str) -> int:
     r = requests.post(f"{MB_URL}/api/card", headers=headers, json={
@@ -332,6 +351,7 @@ def change_display():
         card_id = data.get("card_id") if data else None
         x_field = data.get("x_field") if data else None
         y_field = data.get("y_field") if data else None
+        visualization_options = data.get("visualization_options") if data else None
         if card_id == None or mode == None or x_field == None or y_field == None:
             return abort(400, "Missing inputs")
 
@@ -347,7 +367,7 @@ def change_display():
         if r2.status_code != 200:
             raise Exception(f"HTTP {r2.status_code}: {r2.text}")
         embed_url = generate_embed_url(card_id)
-        return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field}, 200
+        return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field, "visualization_options": visualization_options}, 200
     return ""
 
 @app.route("/api/delete/<int:card_id>")
@@ -381,9 +401,10 @@ async def ask():
             metadata = {
                 "title": "Approved Applications Per Subsector",
                 "x_axis": ['SubSector'],
-                "y_axis": ['TotalApplications']
+                "y_axis": ['TotalApplications'],
+                "visualization_options": ["bar", "pie"]
             }
-            time.sleep(3)
+            time.sleep(4)
         elif question == "Total applicants and approved funding per month last year":
             sql = '''SELECT 
                 EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
@@ -400,9 +421,10 @@ async def ask():
             metadata = {
                 "title": "Total Applicants and Approved Funding Per Month in 2024",
                 "x_axis": ["month"],
-                "y_axis": ["total_applicants", "total_approved_funding"]
+                "y_axis": ["total_applicants", "total_approved_funding"],
+                "visualization_options": ["bar", "line"]
             }
-            time.sleep(3)
+            time.sleep(4)
 
         elif question == "Approved amount per regional district":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
@@ -425,9 +447,10 @@ async def ask():
             metadata = {
                 "title": "Approved Amount per Regional District",
                 "x_axis": ["RegionalDistrict"],
-                "y_axis": ["sum"]
+                "y_axis": ["sum"],
+                "visualization_options": ["bar", "pie", "map"]
             }
-            time.sleep(3)
+            time.sleep(4)
 
         elif question == "Now make it only for 2024 Q3":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
@@ -452,9 +475,10 @@ async def ask():
             metadata = {
                 "title": "Approved Amount per Regional District - 2024 Q3",
                 "x_axis": ["RegionalDistrict"],
-                "y_axis": ["sum"]
+                "y_axis": ["sum"],
+                "visualization_options": ["bar", "pie", "map"]
             }
-            time.sleep(3)
+            time.sleep(4)
 
         else:
         
@@ -465,7 +489,8 @@ async def ask():
 
         card_id = create_question(sql, DB_ID, COLLECTION_ID, metadata['title'])
         embed_url = generate_embed_url(card_id)
-        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis']}, 200
+        print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options']})
+        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options']}, 200
     return ""
 
 if len(sys.argv) > 1 and sys.argv[1] == "g":

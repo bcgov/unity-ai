@@ -11,18 +11,27 @@
     </div>
 
     <div class="bubble bot">
-      <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div>
+      <!-- <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div> -->
+      <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
+        <div class="loader-header">Generating SQL...</div>
+        <sql-loader></sql-loader>
+      </div>
       <div *ngIf="turn.safeUrl == 'failure'">Failure</div>
-      <div *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' ">
+      <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
         <div class="toolbar top">
-          <button (click)="changeDisplay(turn, 'map')">Map</button>
-          <button (click)="changeDisplay(turn, 'pie')">Pie</button>
-          <button (click)="changeDisplay(turn, 'bar')">Bar</button>
-          <button (click)="changeDisplay(turn, 'line')">Line</button>
+          <button *ngIf="turn.embed.visualization_options?.includes('map')" (click)="changeDisplay(turn, 'map')">Map</button>
+          <button *ngIf="turn.embed.visualization_options?.includes('pie')" (click)="changeDisplay(turn, 'pie')">Pie</button>
+          <button *ngIf="turn.embed.visualization_options?.includes('bar')" (click)="changeDisplay(turn, 'bar')">Bar</button>
+          <button *ngIf="turn.embed.visualization_options?.includes('line')" (click)="changeDisplay(turn, 'line')">Line</button>
+          <button *ngIf="turn.embed.visualization_options?.includes('number')" (click)="changeDisplay(turn, 'number')">Number</button>
           <button (click)="changeDisplay(turn, 'table')">Table</button>
         </div>
 
-        <iframe [src]="turn.safeUrl" allowtransparency="true"></iframe>
+        <iframe
+          [src]="turn.safeUrl"
+          allowtransparency="true"
+          (load)="onIframeLoad(turn)"
+        ></iframe>
 
         <div class="toolbar bottom">
           <button (click)="redirectToMB(turn)">View in Metabase</button>

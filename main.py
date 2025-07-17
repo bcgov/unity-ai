@@ -489,8 +489,8 @@ async def ask():
 
         card_id = create_question(sql, DB_ID, COLLECTION_ID, metadata['title'])
         embed_url = generate_embed_url(card_id)
-        print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options']})
-        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options']}, 200
+        print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
+        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""
 
 if len(sys.argv) > 1 and sys.argv[1] == "g":

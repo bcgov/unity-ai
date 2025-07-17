@@ -54,7 +54,6 @@
   transition: opacity 6s;
 }
 .bot-inner.loaded {
-  color: red;
   opacity: 1;
   transition: opacity 0.6s;
 }
@@ -260,5 +259,77 @@
 }
 
 .sql-animation-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* SQL Chevron Button */
+.sql-chevron {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  border: none;
+  border-radius: var(--mb-radius);
+  background: var(--mb-teal-600);
+  color: #fff;
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter .12s, box-shadow .12s;
+  z-index: 10;
+  width: 100px;
+}
+
+.sql-chevron:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--mb-shadow-sm);
+  transform: translateY(-1px);
+}
+
+
+/* SQL Panel */
+.sql-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  z-index: 5;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+
+.sql-panel-header {
+  padding: 0 0 16px 0;
+  background: none;
+  border-bottom: none;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--mb-gray-700);
+}
+
+.sql-code {
+  padding: 16px;
+  margin: 0;
+  font-family: 'Fira Mono', 'Consolas', monospace;
+  font-size: 16px;
+  line-height: 1.5;
+  color: gray;
+  background: #fff;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--mb-gray-200);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex: 1;
+}
+
+.sql-panel::-webkit-scrollbar {
   display: none;
 }

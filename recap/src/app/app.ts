@@ -46,6 +46,10 @@ export class App {
     }
   }
 
+  toggleSqlPanel(turn: Turn): void {
+    turn.sqlPanelOpen = !turn.sqlPanelOpen;
+  }
+
   // In your component class, add a method:
   onIframeLoad(turn: any) {
     console.log('Iframe loaded:', turn.embed.card_id);
@@ -88,7 +92,7 @@ export class App {
       alert("Please enter a question.");
       return;
     }
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "visualization_options": []}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false} as Turn;
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
     this.conversation.push(turn);
     this.scrollToBottom();   
     // Logic to handle the question can be added here

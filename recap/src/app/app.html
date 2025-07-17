@@ -46,6 +46,15 @@
           <button (click)="redirectToMB(turn)">View in Metabase</button>
           <button (click)="deleteQuestion(turn)">Delete Card</button>
         </div>
+
+        <button class="sql-chevron" (click)="toggleSqlPanel(turn)" [class.expanded]="turn.sqlPanelOpen">
+          {{ turn.sqlPanelOpen ? 'Hide SQL' : 'Show SQL' }}
+        </button>
+
+        <div class="sql-panel" *ngIf="turn.sqlPanelOpen">
+          <div class="sql-panel-header">Generated SQL</div>
+          <pre class="sql-code">{{turn.embed.SQL}}</pre>
+        </div>
       </div>
     </div>
     <span #bottomAnchor></span>

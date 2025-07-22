@@ -404,7 +404,7 @@ LIMIT 15;
                 "visualization_options": ["bar", "pie"]
             }
             time.sleep(4)
-        elif question == "Total applicants and approved funding per month last year":
+        elif question == "Total applicants and distributed funding per month in 2024":
             sql = '''SELECT 
     EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
     COUNT(DISTINCT applicants."Id") AS total_applicants, 
@@ -425,7 +425,7 @@ GROUP BY
             }
             time.sleep(4)
 
-        elif question == "Approved amount per regional district":
+        elif question == "Distribution of funding by regional district":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
 SUM("public"."Applications"."ApprovedAmount") AS "sum"
 FROM

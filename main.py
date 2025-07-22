@@ -2,15 +2,14 @@ import dotenv
 import os
 import sys
 import datetime as dt
-from flask import Flask, request, render_template_string, abort, redirect
+from flask import Flask, request, abort
 import time
 import jwt
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-import json, textwrap, requests
+import json, requests
 from flask_cors import CORS
-import shutil
 import asyncio
 import aiohttp
 import os
@@ -47,7 +46,7 @@ _meta_re = re.compile(
 
 enc = tiktoken.encoding_for_model("gpt-4o-mini")   # same tokeniser
 
-os.makedirs(PERSIST_DIR, exist_ok=True) 
+os.makedirs(PERSIST_DIR, exist_ok=True)
 
 embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
 vector_store = Chroma(
@@ -388,15 +387,15 @@ async def ask():
 
         if question == "How many applications were approved in each subsector?":
             sql = '''SELECT COALESCE(applicants."SubSector", 'Unspecified') AS SubSector, 
-                COUNT(*) AS TotalApplications
-                FROM "public"."Applications" AS applications
-                JOIN "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
-                WHERE applicants."SubSector" IS NOT NULL 
-                AND applicants."SubSector" != '' 
-                AND LOWER(applicants."SubSector") != 'other'
-                GROUP BY applicants."SubSector"
-                ORDER BY TotalApplications DESC
-                LIMIT 15;
+COUNT(*) AS TotalApplications
+FROM "public"."Applications" AS applications
+JOIN "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
+WHERE applicants."SubSector" IS NOT NULL 
+AND applicants."SubSector" != '' 
+AND LOWER(applicants."SubSector") != 'other'
+GROUP BY applicants."SubSector"
+ORDER BY TotalApplications DESC
+LIMIT 15;
             '''
             metadata = {
                 "title": "Approved Applications Per Subsector",
@@ -407,17 +406,17 @@ async def ask():
             time.sleep(4)
         elif question == "Total applicants and approved funding per month last year":
             sql = '''SELECT 
-                EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
-                COUNT(DISTINCT applicants."Id") AS total_applicants, 
-                SUM(applications."ApprovedAmount") AS total_approved_funding
-            FROM 
-                "public"."Applications" AS applications
-            JOIN 
-                "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
-            WHERE 
-                EXTRACT(MONTH FROM applications."SubmissionDate") IS NOT NULL
-            GROUP BY 
-                month;'''
+    EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
+    COUNT(DISTINCT applicants."Id") AS total_applicants, 
+    SUM(applications."ApprovedAmount") AS total_approved_funding
+FROM 
+    "public"."Applications" AS applications
+JOIN 
+    "public"."Applicants" AS applicants ON applications."ApplicantId" = applicants."Id"
+WHERE 
+    EXTRACT(MONTH FROM applications."SubmissionDate") IS NOT NULL
+GROUP BY 
+    month;'''
             metadata = {
                 "title": "Total Applicants and Approved Funding Per Month in 2024",
                 "x_axis": ["month"],
@@ -428,21 +427,21 @@ async def ask():
 
         elif question == "Approved amount per regional district":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
-                SUM("public"."Applications"."ApprovedAmount") AS "sum"
-                FROM
-                "public"."Applications"
-                
-                LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
-                WHERE
-                "ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
-                AND
-                "public"."Applications"."RegionalDistrict" IS NOT NULL
-                AND
-                "public"."Applications"."RegionalDistrict" != ''
-                GROUP BY
-                "public"."Applications"."RegionalDistrict"
-                ORDER BY
-                "public"."Applications"."RegionalDistrict" ASC
+SUM("public"."Applications"."ApprovedAmount") AS "sum"
+FROM
+"public"."Applications"
+
+LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+WHERE
+"ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+AND
+"public"."Applications"."RegionalDistrict" IS NOT NULL
+AND
+"public"."Applications"."RegionalDistrict" != ''
+GROUP BY
+"public"."Applications"."RegionalDistrict"
+ORDER BY
+"public"."Applications"."RegionalDistrict" ASC
             '''
             metadata = {
                 "title": "Approved Amount per Regional District",
@@ -454,23 +453,23 @@ async def ask():
 
         elif question == "Now make it only for 2024 Q3":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
-                SUM("public"."Applications"."ApprovedAmount") AS "sum"
-                FROM
-                "public"."Applications"
-                
-                LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
-                WHERE
-                "ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
-                AND
-                "public"."Applications"."RegionalDistrict" IS NOT NULL
-                AND
-                "public"."Applications"."RegionalDistrict" != ''
-                AND "public"."Applications"."SubmissionDate" >= '2024-07-01'
-                AND "public"."Applications"."SubmissionDate" <= '2024-09-30'    
-                GROUP BY
-                "public"."Applications"."RegionalDistrict"
-                ORDER BY
-                "public"."Applications"."RegionalDistrict" ASC
+SUM("public"."Applications"."ApprovedAmount") AS "sum"
+FROM
+"public"."Applications"
+
+LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+WHERE
+"ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+AND
+"public"."Applications"."RegionalDistrict" IS NOT NULL
+AND
+"public"."Applications"."RegionalDistrict" != ''
+AND "public"."Applications"."SubmissionDate" >= '2024-07-01'
+AND "public"."Applications"."SubmissionDate" <= '2024-09-30'    
+GROUP BY
+"public"."Applications"."RegionalDistrict"
+ORDER BY
+"public"."Applications"."RegionalDistrict" ASC
             '''
             metadata = {
                 "title": "Approved Amount per Regional District - 2024 Q3",

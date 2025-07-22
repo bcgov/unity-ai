@@ -6,10 +6,29 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  height: calc(100vh - 140px - 80px); /* viewport minus header minus ask-row */
+  height: calc(100vh - 130px); /* viewport minus header minus ask-row */
   overflow-y: auto;                  /* enable scrolling */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */ 
+}
+
+/* Iframe-specific styling */
+.iframe-embeddable .container {
+  max-width: 100%;
+  height: calc(100vh - 80px); /* Remove header space for iframe */
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.iframe-embeddable .ask-row {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  transform: none;
+  padding: 12px 16px;
+  box-sizing: border-box;
 }
 
 
@@ -25,7 +44,7 @@
 .bubble {
   border-radius: 18px;
   padding: 12px 16px;
-  font-size: 15px;
+  font-size: 16px;
   box-shadow: var(--mb-shadow-sm);
   border: 1px solid var(--mb-gray-200);
   background: #fff;
@@ -37,14 +56,14 @@
 }
 .bubble.bot {
   width: 80%;
-  height: 65vh;
+  height: 75vh;
   position: relative;
-  max-height: 65vh;
+  max-height: 75vh;
 }
 .bubble.bot > div:not(.spinner-center) {
   height: 100%;
   align-self: flex-start;
-  height: 65vh;
+  height: 75vh;
   display: flex;
   flex-direction: column;
 }
@@ -71,7 +90,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .toolbar.top {
   margin-bottom: 10px;
@@ -85,7 +104,7 @@
   background: var(--mb-teal-600);
   color: #fff;
   padding: 7px 16px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: filter .12s, box-shadow .12s;
@@ -117,9 +136,9 @@
   flex: 1 1 0;
   padding: 10px 14px;
   border: 1px solid var(--mb-gray-200);
-  border-radius: var(--mb-radius);
-  font-size: 15px;
+  border-radius: var(--mb-radius); 
   transition: border-color .15s;
+  font-size: 16px;
 }
 .ask-row input[type="text"]:focus {
   outline: none;
@@ -135,10 +154,29 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color .12s, box-shadow .12s;
+  width: 100px;
+  font-size: 16px;
 }
 .ask-row button:hover {
   background: var(--mb-blue-700);
   box-shadow: var(--mb-shadow-sm);
+}
+
+/* Reset button styling */
+.reset-btn {
+  background: #dc3545 !important;
+  color: #fff !important;
+  padding: 11px 16px !important;
+  border: none !important;
+  border-radius: var(--mb-radius) !important;
+  cursor: pointer !important;
+  transition: background-color .12s, box-shadow .12s !important;
+  min-width: 48px !important;
+}
+
+.reset-btn:hover {
+  background: #c82333 !important;
+  box-shadow: var(--mb-shadow-sm) !important;
 }
 
 /* ---------- spinner & error ---------- */
@@ -272,12 +310,12 @@
   background: var(--mb-teal-600);
   color: #fff;
   padding: 7px 16px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: filter .12s, box-shadow .12s;
   z-index: 10;
-  width: 100px;
+  width: 120px;
 }
 
 .sql-chevron:hover {

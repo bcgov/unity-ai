@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, NgZone } from '@angular/core';
+import { Component, ViewChild, ElementRef, NgZone, OnInit } from '@angular/core';
 import { HttpHeaders, HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
@@ -7,13 +7,15 @@ import { CommonModule } from '@angular/common';
 import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlLoaderComponent } from './sql-loader/sql-loader';
+import { AuthService } from './services/auth.service';
+import { IframeDetectorService } from './iframe-detector.service';
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, SqlLoaderComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
-export class App {
+export class App implements OnInit {
   protected title = 'recap';
   protected api_url = 'https://fluffy-goldfish-69wqj5wg6wwjhrvv4-5000.app.github.dev/api';
   protected mb_url = 'https://test-unity-reporting.apps.silver.devops.gov.bc.ca';
@@ -22,11 +24,24 @@ export class App {
 
   constructor(
     private http: HttpClient,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private authService: AuthService,
+    private iframeDetector: IframeDetectorService
   ) {}
 
   @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
   @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
+
+  ngOnInit(): void {
+    // Add iframe-specific styling
+    this.iframeDetector.addIframeClass();
+    
+    // Check if running in iframe and authenticated
+    if (this.iframeDetector.isInIframe() && !this.authService.isAuthenticated()) {
+      console.error('Iframe access requires valid authentication token');
+      // You can handle unauthorized access here
+    }
+  }
 
   private scrollToBottom(): void {
     // Wait until the DOM update that adds the message is done
@@ -60,7 +75,7 @@ export class App {
   }
 
   async redirectToMB(turn: Turn) {
-    return window.location.href = `${this.mb_url}/question/${turn.embed.card_id}`;
+    return window.open(`${this.mb_url}/question/${turn.embed.card_id}`, '_blank');
   }
 
   async deleteQuestion(turn: Turn) {

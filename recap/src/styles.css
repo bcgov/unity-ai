@@ -12,11 +12,11 @@
 }
 
 body {
-  margin: 0;
-  margin-top: 100px;
+  margin: 30px;
   background: var(--mb-gray-050);
   font-family: var(--mb-font-stack) !important; 
   color: #273142;
+  height: 100%;
 }
 
 button, input {

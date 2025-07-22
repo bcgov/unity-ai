@@ -24,7 +24,7 @@ CORS(app)
 
 dotenv.load_dotenv()
 headers = {"x-api-key": os.getenv("METABASE_KEY")}
-MB_URL = "https://test-unity-reporting.apps.silver.devops.gov.bc.ca"
+MB_URL = os.getenv("MB_URL")
 
 DB_ID = 3
 COLLECTION_ID = 47
@@ -248,17 +248,19 @@ def extract_metadata(block: str) -> Optional[Dict[str, Any]]:
 
     return None
 
-async def nl_to_sql(question, db_id):  
+async def nl_to_sql(question, past_questions, db_id):  
 
     retrieved = vector_store.similarity_search(question, k=5)
     retrieved_tables = "\n".join(doc.page_content for doc in retrieved)
 
     with open("QDECOMP_examples.json", "r") as file:
         examples = json.load(file)
-    examples = [f"### Schema:\n{'\n'.join(ex['Schema'])}\n### Question:\n{ex['Question']}\n### Reasoning:\n{ex['Reasoning']}\n### SQL:\n{ex['SQL']}\n### Metadata:\n{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis'], 'visualization_options': ex['visualization_options']})}" for ex in examples]
-    prompt = f"{'\n\n'.join(examples)}\n\n### Schema:\n{retrieved_tables}\n### Question:\nThe current date is {dt.datetime.now().strftime('%Y-%m-%d')}. Please generate sql and metadata for the following question, with reasoning but no explanation: {question}\n### Reasoning:"
+    newline = '\n'
+    examples = [f"### Schema:{newline}{newline.join(ex['Schema'])}{newline}### Question:{newline}{ex['Question']}{newline}### Reasoning:{newline}{ex['Reasoning']}{newline}### SQL:{newline}{ex['SQL']}{newline}### Metadata:{newline}{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis'], 'visualization_options': ex['visualization_options']})}" for ex in examples]
+    past_question_string = f'Note that the previous question in this conversation was: "{past_questions[-2]["question"]}" and the generated SQL was: "{past_questions[-2]["SQL"]}. "' if len(past_questions) > 1 else ""
+    prompt = f"{f'{newline}{newline}'.join(examples)}{newline}{newline}### Schema:{newline}{retrieved_tables}{newline}### Question:{newline}The current date is {dt.datetime.now().strftime('%Y-%m-%d')}. {past_question_string}Please generate sql and metadata for the following question, with reasoning but no explanation: {question}{newline}### Reasoning:"
 
-    print(prompt)
+    # print(prompt)
 
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_chat_completion(prompt, MODEL, session, i) for i in range(K)]
@@ -382,8 +384,12 @@ async def ask():
 
         data = request.get_json()
         question = data.get("question") if data else None
+        conversation = data.get("conversation") if data else None
+        print(conversation)
         if question is None:
             return abort(400, "Question is required")
+        
+        past_questions = [{"question": c["question"], "SQL": c["embed"]["SQL"]} for c in conversation]
 
         if question == "How many applications were approved in each subsector?":
             sql = '''SELECT COALESCE(applicants."SubSector", 'Unspecified') AS SubSector, 
@@ -403,8 +409,8 @@ LIMIT 15;
                 "y_axis": ['TotalApplications'],
                 "visualization_options": ["bar", "pie"]
             }
-            time.sleep(4)
-        elif question == "Total applicants and distributed funding per month in 2024":
+            time.sleep(3)
+        elif question == "Total applications and distributed funding per month in 2024":
             sql = '''SELECT 
     EXTRACT(MONTH FROM applications."SubmissionDate") AS month, 
     COUNT(DISTINCT applicants."Id") AS total_applicants, 
@@ -423,7 +429,7 @@ GROUP BY
                 "y_axis": ["total_applicants", "total_approved_funding"],
                 "visualization_options": ["bar", "line"]
             }
-            time.sleep(4)
+            time.sleep(3)
 
         elif question == "Distribution of funding by regional district":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
@@ -449,7 +455,7 @@ ORDER BY
                 "y_axis": ["sum"],
                 "visualization_options": ["bar", "pie", "map"]
             }
-            time.sleep(4)
+            time.sleep(3)
 
         elif question == "Now make it only for 2024 Q3":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
@@ -477,18 +483,18 @@ ORDER BY
                 "y_axis": ["sum"],
                 "visualization_options": ["bar", "pie", "map"]
             }
-            time.sleep(4)
+            time.sleep(3)
 
         else:
         
-            sql, metadata = await nl_to_sql(question, DB_ID)
+            sql, metadata = await nl_to_sql(question, past_questions, DB_ID)
             if sql == "fail":
                 return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
-            print("Generated SQL:", sql)
+            # print("Generated SQL:", sql)
 
         card_id = create_question(sql, DB_ID, COLLECTION_ID, metadata['title'])
         embed_url = generate_embed_url(card_id)
-        print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
+        # print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
         return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""
 

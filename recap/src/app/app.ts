@@ -9,6 +9,8 @@ import { Turn } from './turn';
 import { SqlLoaderComponent } from './sql-loader/sql-loader';
 import { AuthService } from './services/auth.service';
 import { IframeDetectorService } from './iframe-detector.service';
+import { environment } from '../environments/environment';
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, SqlLoaderComponent],
@@ -17,8 +19,8 @@ import { IframeDetectorService } from './iframe-detector.service';
 })
 export class App implements OnInit {
   protected title = 'recap';
-  protected api_url = 'https://fluffy-goldfish-69wqj5wg6wwjhrvv4-5000.app.github.dev/api';
-  protected mb_url = 'https://test-unity-reporting.apps.silver.devops.gov.bc.ca';
+  protected api_url = environment.apiUrl;
+  protected mb_url = environment.mbUrl;
   question: string = "";
   conversation: Turn[] = [];
 
@@ -114,7 +116,7 @@ export class App implements OnInit {
     console.log("Question asked:", this.question);
     this.question = "";
     try {
-      const body = { question: turn.question };
+      const body = { question: turn.question, conversation: this.conversation};
       turn.embed = await firstValueFrom(
         this.http.post<Embed>(`${this.api_url}/ask`, body, {
           headers: new HttpHeaders({

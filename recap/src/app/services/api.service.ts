@@ -1,6 +1,7 @@
 // chat.service.ts
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -9,7 +10,7 @@ export class ChatService {
   stream(prompt: string, chatId: number, mode: string): Observable<string> {
   return new Observable<string>(observer => {
 
-    fetch('http://localhost:8000/api/chat', {
+    fetch(`${environment.apiUrl}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

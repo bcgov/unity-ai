@@ -8,6 +8,7 @@ import jwt
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
+from langchain_postgres import PGVector
 import json, requests
 from flask_cors import CORS
 import asyncio
@@ -34,6 +35,17 @@ K = 7
 PERSIST_DIR = "./embedded_schema"
 MODEL="gpt-4o-mini"
 
+# Database configuration
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "unity_ai")
+DB_USER = os.getenv("DB_USER", "unity_user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "unity_pass")
+USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
+
+# Construct DATABASE_URL from individual components
+DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
 SQL_BLOCK_RE = re.compile(r"```sql\s*(.+?)```", re.I | re.S)
 _meta_re = re.compile(
     r"""\#\#\#\s*Metadata:\s*           # header
@@ -49,11 +61,21 @@ enc = tiktoken.encoding_for_model("gpt-4o-mini")   # same tokeniser
 os.makedirs(PERSIST_DIR, exist_ok=True)
 
 embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
-vector_store = Chroma(
-    collection_name="embedded_schema",
-    embedding_function=embedding_model,
-    persist_directory="./embedded_schema"
-)
+
+# Initialize vector store based on configuration
+if USE_POSTGRES:
+    vector_store = PGVector(
+        embeddings=embedding_model,
+        collection_name="embedded_schema",
+        connection=DATABASE_URL,
+        use_jsonb=True,
+    )
+else:
+    vector_store = Chroma(
+        collection_name="embedded_schema",
+        embedding_function=embedding_model,
+        persist_directory="./embedded_schema"
+    )
 
 def get_sql(sql):
     ds_req = {
@@ -183,6 +205,7 @@ def get_table_schemas():
 
         page = f"# {tbl['name']}({', '.join(cols)})"
         docs.append(page)
+        print(page)
 
     return docs
 
@@ -497,6 +520,11 @@ ORDER BY
         # print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
         return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""
+
+# Health check
+@app.route("/")
+def health_check():
+    return "Backend is working!"
 
 if len(sys.argv) > 1 and sys.argv[1] == "g":
     print("Beginning Embedding into memory...")

@@ -20,7 +20,16 @@
           <div class="loading-text">Generating Report...</div>
         </div>
       </div>
-      <div *ngIf="turn.safeUrl == 'failure'">Failure</div>
+      <div *ngIf="turn.safeUrl == 'failure'" class="failure-container">
+        <div class="failure-content">
+          <div class="failure-icon">⚠️</div>
+          <div class="failure-title">Unable to Generate Report</div>
+          <div class="failure-message">Sorry, I couldn't process your request. Please try rephrasing your question or check if the data you're looking for exists.</div>
+          <div class="failure-actions">
+            <button class="retry-btn" (click)="retryQuestion(turn)">Try Again</button>
+          </div>
+        </div>
+      </div>
       <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
         <div class="toolbar top">
           <button *ngIf="turn.embed.visualization_options?.includes('map')" (click)="changeDisplay(turn, 'map')">Map</button>

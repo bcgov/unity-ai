@@ -175,10 +175,6 @@ FLASK_ENV=production
 
 ### Optional Environment Variables
 ```
-MB_URL=https://test-unity-reporting.apps.silver.devops.gov.bc.ca
-DB_ID=3
-COLLECTION_ID=47
-
 # PostgreSQL Configuration (Docker sets these automatically)
 USE_POSTGRES=true
 DATABASE_URL=postgresql+psycopg://unity_user:unity_pass@postgres:5432/unity_ai

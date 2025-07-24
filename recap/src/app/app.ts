@@ -116,7 +116,13 @@ export class App implements OnInit {
     console.log("Question asked:", this.question);
     this.question = "";
     try {
-      const body = { question: turn.question, conversation: this.conversation};
+      const body = { 
+        question: turn.question, 
+        conversation: this.conversation, 
+        metabase_url: this.authService.getMetabaseUrl(),
+        tenant_id: this.authService.getTenantId(),
+        collection_id: this.authService.getCollectionId()
+      };
       turn.embed = await firstValueFrom(
         this.http.post<Embed>(`${this.api_url}/ask`, body, {
           headers: new HttpHeaders({
@@ -128,8 +134,21 @@ export class App implements OnInit {
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
     } catch (error) {
       console.error(error);
+      turn.iframeLoaded = true;
+      turn.safeUrl = "failure";
     }
   }
 
+  retryQuestion(turn: Turn): void {
+    // Reset the turn state and retry the question
+    turn.safeUrl = "loading";
+    turn.iframeLoaded = false;
+    turn.sqlPanelOpen = false;
+    
+    // Retry the question with the existing turn
+    this.question = turn.question;
+    this.conversation = this.conversation.filter(t => t !== turn);
+    this.askQuestion();
+  }
 
 }

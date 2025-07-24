@@ -61,6 +61,12 @@
   width: 80%;
   position: relative;
   height: 100%;
+  overflow-y: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  }
+  .bubble.bot::-webkit-scrollbar {
+    display: none;
 }
 .bubble.bot > div:not(.spinner-center) {
   height: 100%;
@@ -371,4 +377,87 @@
 
 .sql-panel::-webkit-scrollbar {
   display: none;
+}
+
+/* ---------- failure state ---------- */
+.failure-container {
+  padding: 24px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.failure-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.failure-content {
+  
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.failure-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #c53030;
+  margin: 0;
+}
+
+.failure-message {
+  font-size: 14px;
+  color: #718096;
+  line-height: 1.5;
+  margin: 0;
+  text-align: center;
+}
+
+.failure-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.retry-btn, .help-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn {
+  background: #3182ce;
+  color: white;
+}
+
+.retry-btn:hover {
+  background: #2c5aa0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.help-btn {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.help-btn:hover {
+  background: #cbd5e0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }

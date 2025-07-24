@@ -25,10 +25,7 @@ CORS(app)
 
 dotenv.load_dotenv()
 headers = {"x-api-key": os.getenv("METABASE_KEY")}
-MB_URL = os.getenv("MB_URL")
 
-DB_ID = 3
-COLLECTION_ID = 47
 EMBED_WORKSHEETS = False
 EMBED_SAMPLES = True
 K = 7
@@ -77,14 +74,14 @@ else:
         persist_directory="./embedded_schema"
     )
 
-def get_sql(sql):
+def get_sql(sql, db_id, metabase_url):
     ds_req = {
-        "database": DB_ID,
+        "database": db_id,
         "type": "native",
         "native": {"query": sql},
     }
     r = requests.post(
-        f"{MB_URL}/api/dataset",
+        f"{metabase_url}/api/dataset",
         headers=headers,
         json=ds_req,
     )
@@ -102,11 +99,11 @@ def extract_sql(text: str) -> str | None:
         return sql_header.group(1).strip()
     return None
 
-def run_and_fingerprint(sql: str) -> tuple[str, tuple[str, ...], str]:
+def run_and_fingerprint(sql: str, db_id, metabase_url) -> tuple[str, tuple[str, ...], str]:
     """
     Returns (row_count, col_name_tuple, digest_of_first_5_rows)
     """
-    data  = get_sql(sql)
+    data  = get_sql(sql, db_id, metabase_url)
     rows  = data["rows"]
     cols  = tuple(                               # ← tuple, not list
         c["name"] if isinstance(c, dict) else c
@@ -216,7 +213,7 @@ def embed_schema():
     if EMBED_WORKSHEETS:
         vector_store.add_documents([Document(page_content=p.strip()) for p in get_parsed_worksheets()])
 
-def sql_is_valid(sql: str, db_id: int) -> tuple[bool, str | None]:
+def sql_is_valid(sql: str, db_id: int, metabase_url) -> tuple[bool, str | None]:
     """
     Try to run `sql` against Metabase and tell whether it works.
 
@@ -230,7 +227,7 @@ def sql_is_valid(sql: str, db_id: int) -> tuple[bool, str | None]:
         "type":     "native",
         "native":   {"query": sql},
     }
-    r = requests.post(f"{MB_URL}/api/dataset", headers=headers, json=payload)
+    r = requests.post(f"{metabase_url}/api/dataset", headers=headers, json=payload)
 
     if r.status_code not in (200, 202):
         return False, f"HTTP {r.status_code}: {r.text}"
@@ -240,7 +237,7 @@ def sql_is_valid(sql: str, db_id: int) -> tuple[bool, str | None]:
         job_id = body["id"]
         deadline = time.time() + 10
         while time.time() < deadline:
-            jr = requests.get(f"{MB_URL}/api/async/{job_id}", headers=headers)
+            jr = requests.get(f"{metabase_url}/api/async/{job_id}", headers=headers)
             if jr.status_code == 200:
                 body = jr.json()
                 break
@@ -271,7 +268,7 @@ def extract_metadata(block: str) -> Optional[Dict[str, Any]]:
 
     return None
 
-async def nl_to_sql(question, past_questions, db_id):  
+async def nl_to_sql(question, past_questions, db_id, metabase_url):  
 
     retrieved = vector_store.similarity_search(question, k=5)
     retrieved_tables = "\n".join(doc.page_content for doc in retrieved)
@@ -304,13 +301,13 @@ async def nl_to_sql(question, past_questions, db_id):
             print("No metadata found in completion:", raw)
             continue
 
-        ok, _ = sql_is_valid(sql, db_id)
+        ok, _ = sql_is_valid(sql, db_id, metabase_url)
         if not ok:
             print("SQL is not valid:", sql)
             continue
 
         try:
-            fp = run_and_fingerprint(sql)
+            fp = run_and_fingerprint(sql, db_id, metabase_url)
             if not fp:
                 print("No fingerprint returned for SQL:", sql)
                 continue
@@ -334,8 +331,8 @@ async def nl_to_sql(question, past_questions, db_id):
         print("raw candidates:", completions)
         print("parsed candidates:", candidates)
 
-def create_question(sql: str, db_id: int, collection_id: int, name: str) -> int:
-    r = requests.post(f"{MB_URL}/api/card", headers=headers, json={
+def create_question(sql: str, db_id: int, collection_id: int, name: str, metabase_url) -> int:
+    r = requests.post(f"{metabase_url}/api/card", headers=headers, json={
         "name": name,
         "visualization_settings": {},
         "collection_id": collection_id,
@@ -351,7 +348,7 @@ def create_question(sql: str, db_id: int, collection_id: int, name: str) -> int:
         raise Exception(f"HTTP {r.status_code}: {r.text}")
 
     card_id = r.json()["id"]
-    r2 = requests.put(f"{MB_URL}/api/card/{card_id}",
+    r2 = requests.put(f"{metabase_url}/api/card/{card_id}",
                       headers=headers,
                       json={"enable_embedding": True})
     if r2.status_code != 200:
@@ -359,13 +356,13 @@ def create_question(sql: str, db_id: int, collection_id: int, name: str) -> int:
 
     return card_id
 
-def generate_embed_url(card_id: int) -> str:
+def generate_embed_url(card_id: int, metabase_url) -> str:
     payload = {
         "resource": {"question": card_id},
         "params":   {}
     }
     token = jwt.encode(payload, os.getenv("MB_EMBED_SECRET"), algorithm="HS256")
-    return f"{MB_URL}/embed/question/{token}?bordered=true&titled=false"
+    return f"{metabase_url}/embed/question/{token}?bordered=true&titled=false"
 
 @app.route("/api/change_display", methods=["POST"])
 def change_display():
@@ -406,11 +403,19 @@ async def ask():
     if request.method == "POST":
 
         data = request.get_json()
-        question = data.get("question") if data else None
-        conversation = data.get("conversation") if data else None
-        print(conversation)
-        if question is None:
-            return abort(400, "Question is required")
+        if data:
+            question = data.get("question") 
+            conversation = data.get("conversation") 
+            metabase_url = data.get("metabase_url")
+            db_id = 3 if data.get("tenant_id") == "tenant123" else -1 # TODO: better way of mapping tenant id to MB DB id
+            collection_id = data.get("collection_id") 
+
+        else:
+            return abort(400, "Data is required")
+        
+        if None in (metabase_url, db_id, collection_id):
+            time.sleep(1)
+            return abort(401, "Authorization required")
         
         past_questions = [{"question": c["question"], "SQL": c["embed"]["SQL"]} for c in conversation]
 
@@ -510,13 +515,13 @@ ORDER BY
 
         else:
         
-            sql, metadata = await nl_to_sql(question, past_questions, DB_ID)
+            sql, metadata = await nl_to_sql(question, past_questions, db_id, metabase_url)
             if sql == "fail":
                 return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
             # print("Generated SQL:", sql)
 
-        card_id = create_question(sql, DB_ID, COLLECTION_ID, metadata['title'])
-        embed_url = generate_embed_url(card_id)
+        card_id = create_question(sql, db_id, collection_id, metadata['title'], metabase_url)
+        embed_url = generate_embed_url(card_id, metabase_url)
         # print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
         return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""

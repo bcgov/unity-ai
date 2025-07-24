@@ -38,15 +38,34 @@ docker-compose exec backend python main.py g
 
 ## Development Setup
 
-### Option 1: With PostgreSQL (Recommended)
+### Quick Development Mode (Recommended)
+For the fastest development experience with live reload:
 
-#### Start PostgreSQL with Docker
 ```bash
-# Start only PostgreSQL service
-docker-compose -f docker-compose.dev.yml up -d postgres
+# Start development environment with live reload
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Or just rebuild specific services
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build frontend
 ```
 
-#### Backend Development
+Development mode features:
+- **Frontend**: Angular dev server with live reload on http://localhost
+- **Backend**: Flask with auto-restart on code changes at http://localhost:5000
+- **Database**: PostgreSQL with persistent data
+- **Live Reload**: Changes to source files trigger automatic rebuilds
+
+### Manual Development Setup
+
+#### Option 1: With PostgreSQL (Recommended)
+
+##### Start PostgreSQL with Docker
+```bash
+# Start only PostgreSQL service
+docker-compose -f docker-compose.yml up -d postgres
+```
+
+##### Backend Development
 ```bash
 # Create virtual environment
 python -m venv venv && source venv/bin/activate
@@ -65,9 +84,9 @@ python main.py g
 python main.py
 ```
 
-### Option 2: Without PostgreSQL (SQLite)
+#### Option 2: Without PostgreSQL (SQLite)
 
-#### Backend Development
+##### Backend Development
 ```bash
 # Create virtual environment
 python -m venv venv && source venv/bin/activate
@@ -82,7 +101,7 @@ python main.py g
 python main.py
 ```
 
-### Frontend
+#### Frontend Development (Manual)
 ```bash
 cd recap
 
@@ -96,7 +115,7 @@ npm install
 ng serve
 ```
 
-The development setup runs:
+Manual development setup runs:
 - Frontend: http://localhost:4200
 - Backend: http://localhost:5000
 

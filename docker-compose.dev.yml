@@ -1,25 +1,46 @@
+version: '3.8'
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: unity_ai
-      POSTGRES_USER: unity_user
-      POSTGRES_PASSWORD: unity_pass
+  frontend:
+    build:
+      context: ./recap
+      dockerfile: Dockerfile.dev
     ports:
-      - "5432:5432"
+      - "80:80"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./recap/src:/app/src
+      - ./recap/angular.json:/app/angular.json
+      - ./recap/package.json:/app/package.json
+      - ./recap/tsconfig.json:/app/tsconfig.json
+    environment:
+      - NODE_ENV=development
     networks:
       - unity-ai-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U unity_user -d unity_ai"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    depends_on:
+      - backend
 
-networks:
-  unity-ai-network:
-    driver: bridge
-
-volumes:
-  postgres_data:
+  backend:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - USE_POSTGRES=true
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=unity_ai
+      - DB_USER=unity_user
+      - DB_PASSWORD=unity_pass
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./embedded_schema:/app/embedded_schema
+      - ./QDECOMP_examples.json:/app/QDECOMP_examples.json
+      - ./sql_examples.json:/app/sql_examples.json
+    networks:
+      - unity-ai-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python -m flask --app main run --host=0.0.0.0 --port=5000 --reload

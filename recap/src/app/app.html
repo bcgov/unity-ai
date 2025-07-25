@@ -33,6 +33,21 @@
 
     <!-- Chat conversation -->
     <div *ngIf="conversation.length > 0" class="chat-container">
+      <div class="turn-navigation" *ngIf="conversation.length > 1">
+        <button class="nav-btn nav-up" (click)="scrollToPreviousTurn()" [disabled]="currentTurnIndex <= 0">
+          <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="turn-counter">{{currentTurnIndex + 1}} / {{conversation.length}}</span>
+        <button class="nav-btn nav-down" (click)="scrollToNextTurn()" [disabled]="currentTurnIndex >= conversation.length - 1">
+          <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(180deg);">
+            <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
       <div class="turns" #turnsContainer>
 
         <div *ngFor="let turn of conversation" class="turn">

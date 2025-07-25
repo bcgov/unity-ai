@@ -26,6 +26,7 @@ export class App implements OnInit {
   conversation: Turn[] = [];
   sidebarOpen: boolean = true;
   currentChatId: string | null = null;
+  currentTurnIndex: number = 0;
 
   constructor(
     private sanitizer: DomSanitizer,
@@ -86,10 +87,10 @@ export class App implements OnInit {
 
   // In your component class, add a method:
   onIframeLoad(turn: any) {
+    // Give more time for the Metabase embed to fully render
     setTimeout(() => {
       turn.iframeLoaded = true;
-    }, 1000);
-    // turn.iframeLoaded = true;
+    }, 3000);
   }
 
   async redirectToMB(turn: Turn) {
@@ -117,6 +118,7 @@ export class App implements OnInit {
 
   async resetConversation() {
     this.conversation = [];
+    this.currentTurnIndex = 0;
   }
 
   async askQuestion() {
@@ -171,6 +173,7 @@ export class App implements OnInit {
   onNewChat(): void {
     this.conversation = [];
     this.currentChatId = null;
+    this.currentTurnIndex = 0;
   }
 
   async loadChat(chatId: string): Promise<void> {
@@ -186,10 +189,11 @@ export class App implements OnInit {
       this.conversation = chatData.conversation.map(turn => ({
         ...turn,
         safeUrl: turn.embed?.url ? this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url) : 'failure',
-        iframeLoaded: true
+        iframeLoaded: !turn.embed?.url // If no URL (failure), mark as loaded
       }));
       
       this.currentChatId = chatId;
+      this.currentTurnIndex = Math.max(0, this.conversation.length - 1);
       
       // Scroll to bottom instantly after loading chat
       this.scrollToBottomInstant();
@@ -218,6 +222,43 @@ export class App implements OnInit {
       }
     } catch (error) {
       // Handle error silently
+    }
+  }
+
+  scrollToPreviousTurn(): void {
+    if (this.currentTurnIndex > 0) {
+      this.currentTurnIndex--;
+      this.scrollToTurn(this.currentTurnIndex);
+    }
+  }
+
+  scrollToNextTurn(): void {
+    if (this.currentTurnIndex < this.conversation.length - 1) {
+      this.currentTurnIndex++;
+      this.scrollToTurn(this.currentTurnIndex);
+    }
+  }
+
+  private scrollToTurn(index: number): void {
+    if (this.turnsContainer) {
+      const turnElements = this.turnsContainer.nativeElement.querySelectorAll('.turn');
+      if (turnElements[index]) {
+        const turnElement = turnElements[index] as HTMLElement;
+        const containerElement = this.turnsContainer.nativeElement;
+        
+        // Get the turn's position relative to the container's scroll area
+        const containerRect = containerElement.getBoundingClientRect();
+        const turnRect = turnElement.getBoundingClientRect();
+        
+        // Calculate the scroll position needed
+        const scrollTop = containerElement.scrollTop + (turnRect.top - containerRect.top);
+        
+        // Scroll the container to show the turn at the top
+        containerElement.scrollTo({
+          top: scrollTop,
+          behavior: 'smooth'
+        });
+      }
     }
   }
 

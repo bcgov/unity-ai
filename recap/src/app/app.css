@@ -39,9 +39,55 @@
 
 .chat-container {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
   height: 100%;
   flex: 1;
+}
+
+.turn-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.nav-btn {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #6c757d;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  color: #495057;
+  border-color: #adb5bd;
+}
+
+.nav-btn:disabled {
+  background: #f8f9fa;
+  color: #adb5bd;
+  border-color: #e9ecef;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.turn-counter {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: center;
 }
 
 /* Iframe-specific styling */

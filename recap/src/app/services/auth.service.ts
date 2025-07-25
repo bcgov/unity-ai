@@ -47,11 +47,15 @@ export class AuthService {
     localStorage.removeItem('jwt_token');
   }
 
-  isAuthenticated(): boolean {
+  async isAuthenticated(): Promise<boolean> {
     const token = this.getToken();
     if (!token) return false;
     
     try {
+      // First validate the signature
+      const isValidSignature = await this.validateSignature(token);
+      if (!isValidSignature) return false;
+      
       const payload = this.decodeToken(token);
       if (!payload || !payload.exp) return false;
       const expiry = payload.exp * 1000;
@@ -91,6 +95,82 @@ export class AuthService {
     }
     
     return atob(base64);
+  }
+
+  private base64urlEncode(str: string): string {
+    return btoa(str)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  async validateSignature(token: string): Promise<boolean> {
+    try {
+      // You'll need to configure this secret - consider environment variable or configuration
+      const secret = 'your-super-secret-key-keep-this-safe'; // TODO: Move to environment config
+      
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        console.error('JWT validation failed: Invalid token format');
+        return false;
+      }
+      
+      const [header, payload, signature] = parts;
+      const signingInput = `${header}.${payload}`;
+      
+      console.log('JWT validation debug:', {
+        header: JSON.parse(this.base64urlDecode(header)),
+        payload: JSON.parse(this.base64urlDecode(payload)),
+        signingInput,
+        signature
+      });
+      
+      // Import secret key for HMAC
+      const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['verify']
+      );
+      
+      // Decode the signature from base64url
+      const signatureBytes = this.base64urlToUint8Array(signature);
+      
+      // Verify the signature
+      const isValid = await crypto.subtle.verify(
+        'HMAC',
+        key,
+        signatureBytes,
+        new TextEncoder().encode(signingInput)
+      );
+      
+      console.log('JWT signature validation result:', isValid);
+      return isValid;
+    } catch (error) {
+      console.error('JWT signature validation failed:', error);
+      return false;
+    }
+  }
+
+  private base64urlToUint8Array(base64url: string): Uint8Array {
+    // Convert base64url to base64
+    let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add padding if needed
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    
+    // Decode base64 to binary string
+    const binary = atob(base64);
+    
+    // Convert binary string to Uint8Array
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
   }
 
   getTenantId(): string | null {

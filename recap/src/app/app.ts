@@ -34,14 +34,19 @@ export class App implements OnInit {
   @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
   @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     // Add iframe-specific styling
     this.iframeDetector.addIframeClass();
     
     // Check if running in iframe and authenticated
-    if (this.iframeDetector.isInIframe() && !this.authService.isAuthenticated()) {
-      console.error('Iframe access requires valid authentication token');
-      // You can handle unauthorized access here
+    if (this.iframeDetector.isInIframe()) {
+      const isAuthenticated = await this.authService.isAuthenticated();
+      if (!isAuthenticated) {
+        console.error('Iframe access requires valid authentication token');
+        // Block the application from functioning
+        document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial;"><h2>Authentication Required</h2><p>Invalid or missing authentication token.</p></div>';
+        return;
+      }
     }
   }
 
@@ -116,6 +121,7 @@ export class App implements OnInit {
     console.log("Question asked:", this.question);
     this.question = "";
     try {
+      if (! await this.authService.isAuthenticated()) throw new Error('Not authenticated');
       const body = { 
         question: turn.question, 
         conversation: this.conversation, 

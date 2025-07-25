@@ -24,7 +24,7 @@ export class App implements OnInit {
   protected mb_url = environment.mbUrl;
   question: string = "";
   conversation: Turn[] = [];
-  sidebarOpen: boolean = false;
+  sidebarOpen: boolean = true;
   currentChatId: string | null = null;
 
   constructor(
@@ -34,7 +34,7 @@ export class App implements OnInit {
     private iframeDetector: IframeDetectorService
   ) {}
 
-  @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
+  @ViewChild('turnsContainer') private turnsContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('sidebar') private sidebar!: SidebarComponent;
 
@@ -56,9 +56,9 @@ export class App implements OnInit {
   private scrollToBottom(): void {
     // Wait until the DOM update that adds the message is done
     setTimeout(() => {
-      if (this.scrollBox) {
-        this.scrollBox.nativeElement.scroll({
-          top:  this.scrollBox.nativeElement.scrollHeight,
+      if (this.turnsContainer) {
+        this.turnsContainer.nativeElement.scroll({
+          top:  this.turnsContainer.nativeElement.scrollHeight,
           behavior: 'smooth'          // ↳ animated; drop for instant jump
         });
       }
@@ -68,8 +68,8 @@ export class App implements OnInit {
   private scrollToBottomInstant(): void {
     // Wait until the DOM update that adds the message is done
     setTimeout(() => {
-      if (this.scrollBox) {
-        this.scrollBox.nativeElement.scrollTop = this.scrollBox.nativeElement.scrollHeight;
+      if (this.turnsContainer) {
+        this.turnsContainer.nativeElement.scrollTop = this.turnsContainer.nativeElement.scrollHeight;
       }
     }, 0);
   }
@@ -166,13 +166,11 @@ export class App implements OnInit {
 
   onChatSelected(chat: Chat): void {
     this.loadChat(chat.id);
-    this.sidebarOpen = false;
   }
 
   onNewChat(): void {
     this.conversation = [];
     this.currentChatId = null;
-    this.sidebarOpen = false;
   }
 
   async loadChat(chatId: string): Promise<void> {
@@ -187,7 +185,7 @@ export class App implements OnInit {
 
       this.conversation = chatData.conversation.map(turn => ({
         ...turn,
-        safeUrl: turn.embed?.url ? this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url) : 'loading',
+        safeUrl: turn.embed?.url ? this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url) : 'failure',
         iframeLoaded: true
       }));
       
@@ -213,6 +211,11 @@ export class App implements OnInit {
       );
 
       this.currentChatId = response.chat_id;
+      
+      // Refresh the chat list in the sidebar
+      if (this.sidebar) {
+        this.sidebar.loadChats();
+      }
     } catch (error) {
       // Handle error silently
     }

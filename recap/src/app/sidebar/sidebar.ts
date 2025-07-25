@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../services/api.service';
+import { AlertComponent } from '../alert/alert';
 
 export interface Chat {
   id: string;
@@ -12,18 +13,23 @@ export interface Chat {
 
 @Component({
   selector: 'app-sidebar',
-  imports: [CommonModule],
+  imports: [CommonModule, AlertComponent],
   templateUrl: './sidebar.html',
   styleUrls: ['./sidebar.css']
 })
 export class SidebarComponent {
   @Input() isOpen: boolean = false;
+  @Input() currentChatId: string | null = null;
   @Output() toggleSidebar = new EventEmitter<void>();
   @Output() chatSelected = new EventEmitter<Chat>();
   @Output() newChat = new EventEmitter<void>();
 
   chats: Chat[] = [];
   loading: boolean = false;
+  
+  // Alert state
+  showDeleteAlert: boolean = false;
+  chatToDelete: Chat | null = null;
 
   constructor(private apiService: ApiService) {}
 
@@ -33,7 +39,10 @@ export class SidebarComponent {
 
   public async loadChats(): Promise<void> {
     try {
-      this.loading = true;
+      // Only show loading if we don't have any chats yet
+      if (this.chats.length === 0) {
+        this.loading = true;
+      }
       
       this.chats = await firstValueFrom(
         this.apiService.getChats<Chat[]>()
@@ -78,21 +87,37 @@ export class SidebarComponent {
     }
   }
 
-  async deleteChat(chat: Chat, event: Event): Promise<void> {
+  deleteChat(chat: Chat, event: Event): void {
     event.stopPropagation();
-    
-    if (!confirm('Are you sure you want to delete this chat?')) {
-      return;
-    }
+    this.chatToDelete = chat;
+    this.showDeleteAlert = true;
+  }
 
+  async confirmDelete(): Promise<void> {
+    if (!this.chatToDelete) return;
+
+    const deletedChatId = this.chatToDelete.id;
+    
     try {
       await firstValueFrom(
-        this.apiService.deleteChat(chat.id)
+        this.apiService.deleteChat(deletedChatId)
       );
 
-      this.chats = this.chats.filter(c => c.id !== chat.id);
+      this.chats = this.chats.filter(c => c.id !== deletedChatId);
+      
+      // If we deleted the current chat, trigger a new chat
+      if (this.currentChatId === deletedChatId) {
+        this.newChat.emit();
+      }
     } catch (error) {
       // Handle error silently
     }
+
+    this.cancelDelete();
+  }
+
+  cancelDelete(): void {
+    this.showDeleteAlert = false;
+    this.chatToDelete = null;
   }
 }

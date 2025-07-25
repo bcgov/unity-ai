@@ -12,7 +12,7 @@
 }
 
 body {
-  margin: 30px;
+  margin: 0px;
   background: var(--mb-gray-050);
   font-family: var(--mb-font-stack) !important; 
   color: #273142;

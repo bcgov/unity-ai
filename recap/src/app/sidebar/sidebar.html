@@ -1,14 +1,10 @@
-<div class="sidebar-overlay" [class.open]="isOpen" (click)="onToggle()"></div>
-
-<div class="sidebar" [class.open]="isOpen">
+<div class="sidebar">
   <div class="sidebar-header">
-    <button class="sidebar-close-btn" (click)="onToggle()">
-      ×
+    <button class="new-chat-btn" (click)="onNewChat()">
+      <span class="new-chat-icon">+</span>
+      New Chat
     </button>
     <h2>Chats</h2>
-    <button class="new-chat-btn" (click)="onNewChat()">
-      <span class="new-chat-icon">📝</span>
-    </button>
   </div>
 
   <div class="sidebar-content">
@@ -24,22 +20,28 @@
       <div 
         *ngFor="let chat of chats" 
         class="chat-item"
+        [class.active]="currentChatId === chat.id"
         (click)="onChatSelect(chat)"
       >
         <div class="chat-title">{{ chat.title }}</div>
-        <div class="chat-date">{{ formatToPST(chat.updated_at) }}</div>
         <button 
           class="delete-chat-btn" 
           (click)="deleteChat(chat, $event)"
           title="Delete chat"
         >
-          🗑️
+          ×
         </button>
       </div>
     </div>
   </div>
 </div>
 
-<button class="sidebar-toggle" (click)="onToggle()" [class.hidden]="isOpen">
-  ☰
-</button>
+<app-alert
+  [isVisible]="showDeleteAlert"
+  title="Delete Chat"
+  message="Are you sure you want to delete this chat? This action cannot be undone."
+  confirmText="Delete"
+  cancelText="Cancel"
+  (confirm)="confirmDelete()"
+  (cancel)="cancelDelete()">
+</app-alert>

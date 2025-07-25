@@ -1,99 +1,47 @@
-.sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 998;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.sidebar-overlay.open {
-  opacity: 1;
-  visibility: visible;
-}
 
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: -320px;
-  width: 320px;
-  height: 100%;
-  background-color: #f8f9fa;
-  border-right: 1px solid #dee2e6;
-  z-index: 999;
-  transition: left 0.3s ease;
+  border-right: 1px solid #e9ecef;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar.open {
-  left: 0;
+  height: 100vh;
+  width: 220px;
+  background: #fff;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 
 .sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid #dee2e6;
-  background-color: #fff;
+  padding: 16px 12px 6px 12px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   flex-shrink: 0;
-  position: relative;
 }
 
 .sidebar-header h2 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #333;
+  margin-top: 14px;
+  margin-left: 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6c757d;
+  text-align: left;
 }
 
-.sidebar-close-btn {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  cursor: pointer;
-  z-index: 1000;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: background-color 0.2s ease;
-}
-
-.sidebar-close-btn:hover {
-  background-color: #0056b3;
-}
 
 .new-chat-btn {
-  background-color: #28a745;
-  color: white;
+  background: transparent;
+  color: #333;
   border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  transition: background-color 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.new-chat-btn:hover {
-  background-color: #218838;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
 }
 
 .new-chat-icon {
@@ -111,6 +59,7 @@
   text-align: center;
   color: #6c757d;
   font-style: italic;
+  font-size: 0.9rem;
 }
 
 .chat-list {
@@ -118,26 +67,21 @@
 }
 
 .chat-item {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e9ecef;
+  margin: 6px 12px;
+  padding: 8px 14px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  border-radius: 8px;
 }
 
-.chat-item:hover {
+.chat-item:hover, .chat-item.active, .new-chat-btn:hover {
   background-color: #e9ecef;
 }
 
-.chat-item:last-child {
-  border-bottom: none;
-}
-
 .chat-title {
-  font-weight: 500;
+  font-weight: 400;
   color: #333;
   font-size: 0.9rem;
   line-height: 1.4;
@@ -148,23 +92,29 @@
 }
 
 .chat-date {
-  font-size: 0.75rem;
-  color: #6c757d;
+  font-size: 0.7rem;
+  color: #adb5bd;
   margin-top: 2px;
 }
 
 .delete-chat-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
   border-radius: 4px;
   opacity: 0;
-  transition: opacity 0.2s ease, background-color 0.2s ease;
-  font-size: 14px;
+  font-size: 16px;
+  color: #6c757d;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .chat-item:hover .delete-chat-btn {
@@ -172,48 +122,15 @@
 }
 
 .delete-chat-btn:hover {
-  background-color: #dc3545;
-  color: white;
-}
-
-.sidebar-toggle {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  cursor: pointer;
-  z-index: 997;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-color: #e9ecef;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: background-color 0.2s ease, opacity 0.3s ease, visibility 0.3s ease;
+  color: #333;
 }
 
-.sidebar-toggle:hover {
-  background-color: #0056b3;
-}
-
-.sidebar-toggle.hidden {
-  opacity: 0;
-  visibility: hidden;
-}
 
 @media (max-width: 768px) {
   .sidebar {
     width: 280px;
     left: -280px;
-  }
-  
-  .sidebar-toggle {
-    width: 45px;
-    height: 45px;
-    font-size: 18px;
   }
 }

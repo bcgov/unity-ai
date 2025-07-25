@@ -1,84 +1,117 @@
 
-<app-sidebar 
-  #sidebar
-  [isOpen]="sidebarOpen" 
-  (toggleSidebar)="toggleSidebar()"
-  (chatSelected)="onChatSelected($event)"
-  (newChat)="onNewChat()">
-</app-sidebar>
 
-<div class="container" #scrollBox>
+<div class="outer-container">
+  <app-sidebar 
+    #sidebar
+    [isOpen]="sidebarOpen"
+    [currentChatId]="currentChatId"
+    (toggleSidebar)="toggleSidebar()"
+    (chatSelected)="onChatSelected($event)"
+    (newChat)="onNewChat()">
+  </app-sidebar>
 
-  <div *ngFor="let turn of conversation" class="turn">
-    <div class="bubble user">
-      {{ turn.question }}
+  <div class="container" #scrollBox>
+
+    <!-- Empty state -->
+    <div *ngIf="conversation.length === 0" class="empty-chat-container">
+      <div class="welcome-content">
+        <h1 class="welcome-title">What would you like to report?</h1>
+        <div class="ask-row welcome-ask-row">
+          <input type="text"
+                [(ngModel)]="question"
+                placeholder="Ask a question about your data..."
+                (keyup.enter)="askQuestion()" />
+          <button (click)="askQuestion()">
+            <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="bubble bot">
-      <!-- <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div> -->
-      <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
-        <div class="sql-animation-container" #sqlAnimationContainer>
-          <sql-loader [parentScrollFn]="scrollSqlToBottom.bind(this)"></sql-loader>
-        </div>
-        <div class="loading-animation-overlay">
-          <div class="loading-dots">
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
+
+    <!-- Chat conversation -->
+    <div *ngIf="conversation.length > 0" class="chat-container">
+      <div class="turns" #turnsContainer>
+
+        <div *ngFor="let turn of conversation" class="turn">
+          <!-- <div class="bubble user">
+            {{ turn.question }}
+          </div> -->
+          <div class="bubble bot">
+            <!-- <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div> -->
+            <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
+              <div class="sql-animation-container" #sqlAnimationContainer>
+                <sql-loader [parentScrollFn]="scrollSqlToBottom.bind(this)"></sql-loader>
+              </div>
+              <div class="loading-animation-overlay">
+                <div class="loading-dots">
+                  <div class="loading-dot"></div>
+                  <div class="loading-dot"></div>
+                  <div class="loading-dot"></div>
+                </div>
+                <div class="loading-text">Generating Report...</div>
+              </div>
+            </div>
+            <div *ngIf="turn.safeUrl == 'failure'" class="failure-container">
+              <div class="failure-content">
+                <div class="failure-icon">⚠️</div>
+                <div class="failure-title">Unable to Generate Report</div>
+                <div class="failure-message">Sorry, I couldn't process your request. Please try rephrasing your question or check if the data you're looking for exists.</div>
+                <div class="failure-actions">
+                  <button class="retry-btn" (click)="retryQuestion(turn)">Try Again</button>
+                </div>
+              </div>
+            </div>
+            <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
+              <div class="toolbar top">
+                <button *ngIf="turn.embed.visualization_options?.includes('map')" (click)="changeDisplay(turn, 'map')">Map</button>
+                <button *ngIf="turn.embed.visualization_options?.includes('pie')" (click)="changeDisplay(turn, 'pie')">Pie</button>
+                <button *ngIf="turn.embed.visualization_options?.includes('bar')" (click)="changeDisplay(turn, 'bar')">Bar</button>
+                <button *ngIf="turn.embed.visualization_options?.includes('line')" (click)="changeDisplay(turn, 'line')">Line</button>
+                <button (click)="changeDisplay(turn, 'table')">Table</button>
+              </div>
+
+              <iframe
+                [src]="turn.safeUrl"
+                allowtransparency="true"
+                (load)="onIframeLoad(turn)"
+              ></iframe>
+
+              <div class="toolbar bottom">
+                <button (click)="redirectToMB(turn)">View in Metabase</button>
+                <button (click)="deleteQuestion(turn)">Delete Card</button>
+              </div>
+
+              <button class="sql-chevron" (click)="toggleSqlPanel(turn)" [class.expanded]="turn.sqlPanelOpen">
+                {{ turn.sqlPanelOpen ? 'Hide SQL' : 'Show SQL' }}
+              </button>
+
+              <div class="sql-panel" *ngIf="turn.sqlPanelOpen">
+                <div class="sql-panel-header">Generated SQL</div>
+                <pre class="sql-code">{{turn.embed.SQL}}</pre>
+              </div>
+            </div>
           </div>
-          <div class="loading-text">Generating Report...</div>
+          <span #bottomAnchor></span>
         </div>
       </div>
-      <div *ngIf="turn.safeUrl == 'failure'" class="failure-container">
-        <div class="failure-content">
-          <div class="failure-icon">⚠️</div>
-          <div class="failure-title">Unable to Generate Report</div>
-          <div class="failure-message">Sorry, I couldn't process your request. Please try rephrasing your question or check if the data you're looking for exists.</div>
-          <div class="failure-actions">
-            <button class="retry-btn" (click)="retryQuestion(turn)">Try Again</button>
-          </div>
-        </div>
-      </div>
-      <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
-        <div class="toolbar top">
-          <button *ngIf="turn.embed.visualization_options?.includes('map')" (click)="changeDisplay(turn, 'map')">Map</button>
-          <button *ngIf="turn.embed.visualization_options?.includes('pie')" (click)="changeDisplay(turn, 'pie')">Pie</button>
-          <button *ngIf="turn.embed.visualization_options?.includes('bar')" (click)="changeDisplay(turn, 'bar')">Bar</button>
-          <button *ngIf="turn.embed.visualization_options?.includes('line')" (click)="changeDisplay(turn, 'line')">Line</button>
-          <button *ngIf="turn.embed.visualization_options?.includes('number')" (click)="changeDisplay(turn, 'number')">Number</button>
-          <button (click)="changeDisplay(turn, 'table')">Table</button>
-        </div>
 
-        <iframe
-          [src]="turn.safeUrl"
-          allowtransparency="true"
-          (load)="onIframeLoad(turn)"
-        ></iframe>
-
-        <div class="toolbar bottom">
-          <button (click)="redirectToMB(turn)">View in Metabase</button>
-          <button (click)="deleteQuestion(turn)">Delete Card</button>
-        </div>
-
-        <button class="sql-chevron" (click)="toggleSqlPanel(turn)" [class.expanded]="turn.sqlPanelOpen">
-          {{ turn.sqlPanelOpen ? 'Hide SQL' : 'Show SQL' }}
+      <div class="ask-row">
+        
+        <input type="text"
+              [(ngModel)]="question"
+              placeholder="Ask a question"
+              (keyup.enter)="askQuestion()" />
+        <!-- <button class="reset-btn" (click)="resetConversation()">Reset</button> -->
+        <button (click)="askQuestion()">
+          <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </button>
-
-        <div class="sql-panel" *ngIf="turn.sqlPanelOpen">
-          <div class="sql-panel-header">Generated SQL</div>
-          <pre class="sql-code">{{turn.embed.SQL}}</pre>
-        </div>
       </div>
     </div>
-    <span #bottomAnchor></span>
-  </div>
-
-  <div class="ask-row">
-    
-    <input type="text"
-           [(ngModel)]="question"
-           placeholder="Ask a question"
-           (keyup.enter)="askQuestion()" />
-    <!-- <button class="reset-btn" (click)="resetConversation()">Reset</button> -->
-    <button (click)="askQuestion()">Ask</button>
   </div>
 </div>

@@ -18,9 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create embedded_schema directory
-RUN mkdir -p ./embedded_schema
-
 # Expose port
 EXPOSE 5000
 

@@ -1,4 +1,12 @@
 
+<app-sidebar 
+  #sidebar
+  [isOpen]="sidebarOpen" 
+  (toggleSidebar)="toggleSidebar()"
+  (chatSelected)="onChatSelected($event)"
+  (newChat)="onNewChat()">
+</app-sidebar>
+
 <div class="container" #scrollBox>
 
   <div *ngFor="let turn of conversation" class="turn">

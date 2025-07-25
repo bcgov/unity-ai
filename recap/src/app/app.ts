@@ -1,5 +1,4 @@
 import { Component, ViewChild, ElementRef, NgZone, OnInit } from '@angular/core';
-import { HttpHeaders, HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -8,12 +7,14 @@ import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlLoaderComponent } from './sql-loader/sql-loader';
 import { AuthService } from './services/auth.service';
+import { ApiService } from './services/api.service';
 import { IframeDetectorService } from './iframe-detector.service';
+import { SidebarComponent, Chat } from './sidebar/sidebar';
 import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlLoaderComponent],
+  imports: [CommonModule, FormsModule, SqlLoaderComponent, SidebarComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -23,16 +24,19 @@ export class App implements OnInit {
   protected mb_url = environment.mbUrl;
   question: string = "";
   conversation: Turn[] = [];
+  sidebarOpen: boolean = false;
+  currentChatId: string | null = null;
 
   constructor(
-    private http: HttpClient,
     private sanitizer: DomSanitizer,
     private authService: AuthService,
+    private apiService: ApiService,
     private iframeDetector: IframeDetectorService
   ) {}
 
   @ViewChild('scrollBox') private scrollBox!: ElementRef<HTMLDivElement>;
   @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sidebar') private sidebar!: SidebarComponent;
 
   async ngOnInit(): Promise<void> {
     // Add iframe-specific styling
@@ -42,7 +46,6 @@ export class App implements OnInit {
     if (this.iframeDetector.isInIframe()) {
       const isAuthenticated = await this.authService.isAuthenticated();
       if (!isAuthenticated) {
-        console.error('Iframe access requires valid authentication token');
         // Block the application from functioning
         document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial;"><h2>Authentication Required</h2><p>Invalid or missing authentication token.</p></div>';
         return;
@@ -62,6 +65,15 @@ export class App implements OnInit {
     }, 0);
   }
 
+  private scrollToBottomInstant(): void {
+    // Wait until the DOM update that adds the message is done
+    setTimeout(() => {
+      if (this.scrollBox) {
+        this.scrollBox.nativeElement.scrollTop = this.scrollBox.nativeElement.scrollHeight;
+      }
+    }, 0);
+  }
+
   scrollSqlToBottom(): void {
     if (this.sqlAnimationContainer) {
       this.sqlAnimationContainer.nativeElement.scrollTop = this.sqlAnimationContainer.nativeElement.scrollHeight;
@@ -74,7 +86,6 @@ export class App implements OnInit {
 
   // In your component class, add a method:
   onIframeLoad(turn: any) {
-    console.log('Iframe loaded:', turn.embed.card_id);
     setTimeout(() => {
       turn.iframeLoaded = true;
     }, 1000);
@@ -87,21 +98,20 @@ export class App implements OnInit {
 
   async deleteQuestion(turn: Turn) {
     await firstValueFrom(
-      this.http.get(`${this.api_url}/delete/${turn.embed.card_id}`)
+      this.apiService.deleteCard(turn.embed.card_id)
     );
     this.conversation = this.conversation.filter(t => t !== turn);
   }
 
   async changeDisplay(turn: Turn, mode: string) {
     try {
-      const body = { mode: mode, card_id: turn.embed.card_id, x_field: turn.embed.x_field, y_field: turn.embed.y_field };
       const res = await firstValueFrom(
-        this.http.post<Embed>(`${this.api_url}/change_display`, body)
+        this.apiService.changeDisplay<Embed>(turn.embed.card_id, mode, turn.embed.x_field, turn.embed.y_field)
       );
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(res.url + '&cb=' + Date.now());
       // turn.embed = res;
     } catch (error) {
-      console.error(error);
+      // Handle error silently
     }
   }
 
@@ -117,31 +127,19 @@ export class App implements OnInit {
     const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
     this.conversation.push(turn);
     this.scrollToBottom();   
-    // Logic to handle the question can be added here
-    console.log("Question asked:", this.question);
     this.question = "";
     try {
       if (! await this.authService.isAuthenticated()) throw new Error('Not authenticated');
-      const body = { 
-        question: turn.question, 
-        conversation: this.conversation, 
-        metabase_url: this.authService.getMetabaseUrl(),
-        tenant_id: this.authService.getTenantId(),
-        collection_id: this.authService.getCollectionId()
-      };
+      
       turn.embed = await firstValueFrom(
-        this.http.post<Embed>(`${this.api_url}/ask`, body, {
-          headers: new HttpHeaders({
-          'Content-Type': 'application/json'
-          })
-        })
+        this.apiService.askQuestion<Embed>(turn.question, this.conversation)
       );
-      console.log(turn.embed);
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
+      await this.saveChat();
     } catch (error) {
-      console.error(error);
       turn.iframeLoaded = true;
       turn.safeUrl = "failure";
+      // Error is handled by setting failure state
     }
   }
 
@@ -155,6 +153,69 @@ export class App implements OnInit {
     this.question = turn.question;
     this.conversation = this.conversation.filter(t => t !== turn);
     this.askQuestion();
+  }
+
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+    
+    // Refresh chat list when opening sidebar
+    if (this.sidebarOpen && this.sidebar) {
+      this.sidebar.loadChats();
+    }
+  }
+
+  onChatSelected(chat: Chat): void {
+    this.loadChat(chat.id);
+    this.sidebarOpen = false;
+  }
+
+  onNewChat(): void {
+    this.conversation = [];
+    this.currentChatId = null;
+    this.sidebarOpen = false;
+  }
+
+  async loadChat(chatId: string): Promise<void> {
+    try {
+      if (!await this.authService.isAuthenticated()) {
+        throw new Error('Not authenticated');
+      }
+
+      const chatData = await firstValueFrom(
+        this.apiService.getChat<{conversation: Turn[]}>(chatId)
+      );
+
+      this.conversation = chatData.conversation.map(turn => ({
+        ...turn,
+        safeUrl: turn.embed?.url ? this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url) : 'loading',
+        iframeLoaded: true
+      }));
+      
+      this.currentChatId = chatId;
+      
+      // Scroll to bottom instantly after loading chat
+      this.scrollToBottomInstant();
+    } catch (error) {
+      // Handle error silently
+    }
+  }
+
+  async saveChat(): Promise<void> {
+    if (this.conversation.length === 0) return;
+
+    try {
+      if (!await this.authService.isAuthenticated()) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await firstValueFrom(
+        this.apiService.saveChat<{chat_id: string}>(this.currentChatId, this.conversation, this.conversation[0]?.question || 'New Chat')
+      );
+
+      this.currentChatId = response.chat_id;
+    } catch (error) {
+      // Handle error silently
+    }
   }
 
 }

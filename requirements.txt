@@ -12,7 +12,6 @@ build==1.2.2.post1
 cachetools==5.5.2
 certifi==2025.4.26
 charset-normalizer==3.4.2
-chromadb==1.0.13
 psycopg[binary]==3.2.3
 langchain-postgres==0.0.12
 click==8.2.1
@@ -51,7 +50,6 @@ jsonschema==4.24.0
 jsonschema-specifications==2025.4.1
 kubernetes==33.1.0
 langchain==0.3.25
-langchain-chroma==0.2.4
 langchain-core==0.3.65
 langchain-openai==0.3.24
 langchain-text-splitters==0.3.8

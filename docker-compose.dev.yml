@@ -24,8 +24,6 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      - USE_POSTGRES=true
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=unity_ai
@@ -35,7 +33,6 @@ services:
       - .env
     volumes:
       - .:/app
-      - ./embedded_schema:/app/embedded_schema
       - ./QDECOMP_examples.json:/app/QDECOMP_examples.json
       - ./sql_examples.json:/app/sql_examples.json
     networks:

@@ -10,4 +10,6 @@ bootstrapApplication(App, {
     provideHttpClient()
   ]
 })
-  .catch((err) => console.error(err));
+  .catch((err) => {
+    // Handle bootstrap error silently
+  });

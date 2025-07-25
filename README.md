@@ -5,7 +5,8 @@ A full-stack AI application with Flask backend and Angular frontend for generati
 ## Architecture
 
 - **Backend**: Python Flask API with OpenAI integration and Metabase connectivity
-- **Frontend**: Angular application with environment-based configuration
+- **Frontend**: Angular application with environment-based configuration and chat history sidebar
+- **Database**: PostgreSQL with pgvector extension for vector embeddings
 - **Deployment**: Docker containers with nginx proxy
 
 ## Quick Start with Docker
@@ -32,7 +33,7 @@ The application will be available at:
 ### 3. Initialize Schema Embeddings
 After first startup, initialize the schema embeddings:
 ```bash
-# Embed schema into PostgreSQL
+# Embed schema into PostgreSQL vector store
 docker-compose exec backend python main.py g
 ```
 
@@ -51,13 +52,14 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build fronte
 
 Development mode features:
 - **Frontend**: Angular dev server with live reload on http://localhost
-- **Backend**: Flask with auto-restart on code changes at http://localhost:5000
+- **Backend**: Flask with debug mode and auto-restart on code changes at http://localhost:5000
 - **Database**: PostgreSQL with persistent data
 - **Live Reload**: Changes to source files trigger automatic rebuilds
+- **Debug Mode**: Detailed error pages and verbose logging
 
 ### Manual Development Setup
 
-#### Option 1: With PostgreSQL (Recommended)
+#### Backend Development (PostgreSQL Required)
 
 ##### Start PostgreSQL with Docker
 ```bash
@@ -74,25 +76,7 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
 # Set environment variables for PostgreSQL
-export USE_POSTGRES=true
 export DATABASE_URL=postgresql+psycopg://unity_user:unity_pass@localhost:5432/unity_ai
-
-# Embed schema (run once)
-python main.py g
-
-# Start Flask server
-python main.py
-```
-
-#### Option 2: Without PostgreSQL (SQLite)
-
-##### Backend Development
-```bash
-# Create virtual environment
-python -m venv venv && source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
 
 # Embed schema (run once)
 python main.py g
@@ -138,9 +122,10 @@ The frontend supports multiple environment configurations:
 ### Backend Service
 - **Base Image**: python:3.11-slim
 - **Port**: 5000
-- **Environment**: Flask production mode with PostgreSQL
-- **Volumes**: Persistent storage for embedded schema
-- **Dependencies**: PostgreSQL service
+- **Environment**: Flask with configurable debug mode (controlled by FLASK_ENV)
+- **Dependencies**: PostgreSQL service with pgvector extension
+- **Production**: `FLASK_ENV=production` - optimized performance, no debug
+- **Development**: `FLASK_ENV=development` - debug mode, auto-reload
 
 ### Frontend Service  
 - **Build Stage**: node:22-alpine (Angular build)
@@ -153,12 +138,17 @@ The frontend supports multiple environment configurations:
 - `POST /api/ask` - Submit natural language questions
 - `POST /api/change_display` - Change visualization type
 - `DELETE /api/delete/<card_id>` - Delete generated questions
+- `POST /api/chats` - Get all user chats
+- `POST /api/chats/{id}` - Load specific chat conversation
+- `POST /api/chats/save` - Save/update chat conversation
+- `DELETE /api/chats/{id}` - Delete a chat
 
 ## Features
 
 - Natural language to SQL conversion
 - Multiple visualization types (bar, pie, line, map)
-- Conversation history
+- Toggle-able sidebar with chat history
+- Persistent conversation storage
 - SQL query inspection
 - Metabase integration for data visualization
 - JWT-based embedding for secure iframe access
@@ -170,14 +160,20 @@ The frontend supports multiple environment configurations:
 OPENAI_API_KEY=your_openai_api_key_here
 METABASE_KEY=your_metabase_api_key_here  
 MB_EMBED_SECRET=your_metabase_embed_secret_here
-FLASK_ENV=production
 ```
 
 ### Optional Environment Variables
 ```
+# Flask Environment (controls debug mode and performance)
+FLASK_ENV=production          # Use 'production' for optimized performance, 'development' for debugging
+
 # PostgreSQL Configuration (Docker sets these automatically)
-USE_POSTGRES=true
 DATABASE_URL=postgresql+psycopg://unity_user:unity_pass@postgres:5432/unity_ai
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=unity_ai
+DB_USER=unity_user
+DB_PASSWORD=unity_pass
 ```
 
 ## Troubleshooting
@@ -186,7 +182,7 @@ DATABASE_URL=postgresql+psycopg://unity_user:unity_pass@postgres:5432/unity_ai
 The Docker setup uses nginx to proxy API requests, eliminating CORS issues. For development, ensure the backend allows CORS from localhost:4200.
 
 ### Schema Embedding
-Run `python main.py g` after any database schema changes to re-embed the schema for better query generation.
+Run `python main.py g` after any database schema changes to re-embed the schema for better query generation. This stores vector embeddings in PostgreSQL using the pgvector extension.
 
 For Docker: `docker-compose exec backend python main.py g`
 
@@ -196,13 +192,10 @@ If you encounter connection issues with PostgreSQL:
 1. **Development**: Ensure PostgreSQL is running: `docker-compose -f docker-compose.dev.yml up -d postgres`
 2. **Docker**: Check service health: `docker-compose ps`
 3. **Database doesn't exist**: The application will create tables automatically on first run
+4. **pgvector extension**: Ensure the pgvector extension is installed (included in pgvector/pgvector:pg16 image)
 
-### Database Migration
-To switch between SQLite and PostgreSQL:
-
-1. **To PostgreSQL**: Set `USE_POSTGRES=true` and `DATABASE_URL` in environment
-2. **To SQLite**: Set `USE_POSTGRES=false` or remove the variable
-3. **Re-embed schema**: Run `python main.py g` after switching databases
+### Database Requirements
+The application now requires PostgreSQL with the pgvector extension for vector embeddings storage. SQLite is no longer supported.
 
 ### Port Conflicts
 - Docker uses ports 80 (frontend) and 5000 (backend)

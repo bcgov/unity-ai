@@ -6,6 +6,7 @@ export interface JwtPayload {
   collection_id?: number;
   metabase_url?: string;
   exp?: number;
+  user_id?: string;
   [key: string]: any;
 }
 
@@ -111,19 +112,11 @@ export class AuthService {
       
       const parts = token.split('.');
       if (parts.length !== 3) {
-        console.error('JWT validation failed: Invalid token format');
         return false;
       }
       
       const [header, payload, signature] = parts;
       const signingInput = `${header}.${payload}`;
-      
-      console.log('JWT validation debug:', {
-        header: JSON.parse(this.base64urlDecode(header)),
-        payload: JSON.parse(this.base64urlDecode(payload)),
-        signingInput,
-        signature
-      });
       
       // Import secret key for HMAC
       const key = await crypto.subtle.importKey(
@@ -145,10 +138,8 @@ export class AuthService {
         new TextEncoder().encode(signingInput)
       );
       
-      console.log('JWT signature validation result:', isValid);
       return isValid;
     } catch (error) {
-      console.error('JWT signature validation failed:', error);
       return false;
     }
   }
@@ -186,5 +177,10 @@ export class AuthService {
   getMetabaseUrl(): string | null {
     const payload = this.decodeToken();
     return payload?.metabase_url || null;
+  }
+
+  getUserId(): string | null {
+    const payload = this.decodeToken();
+    return payload?.user_id || null;
   }
 }

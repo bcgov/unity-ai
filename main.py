@@ -5,7 +5,6 @@ import datetime as dt
 from flask import Flask, request, abort
 import time
 import jwt
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
@@ -19,17 +18,32 @@ import hashlib, json
 from collections import Counter
 import tiktoken
 from typing import Optional, Dict, Any
+import psycopg
+import uuid
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
 dotenv.load_dotenv()
+
+# Flask environment configuration
+FLASK_ENV = os.getenv("FLASK_ENV", "development")
+
+# Configure Flask based on environment
+if FLASK_ENV == "production":
+    app.config['DEBUG'] = False
+    app.config['TESTING'] = False
+else:
+    # Default to development settings for any non-production environment
+    app.config['DEBUG'] = True
+    app.config['TESTING'] = False
+
 headers = {"x-api-key": os.getenv("METABASE_KEY")}
 
 EMBED_WORKSHEETS = False
 EMBED_SAMPLES = True
 K = 7
-PERSIST_DIR = "./embedded_schema"
 MODEL="gpt-4o-mini"
 
 # Database configuration
@@ -38,7 +52,6 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "unity_ai")
 DB_USER = os.getenv("DB_USER", "unity_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "unity_pass")
-USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
 
 # Construct DATABASE_URL from individual components
 DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -55,24 +68,49 @@ _meta_re = re.compile(
 
 enc = tiktoken.encoding_for_model("gpt-4o-mini")   # same tokeniser
 
-os.makedirs(PERSIST_DIR, exist_ok=True)
-
 embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
 
-# Initialize vector store based on configuration
-if USE_POSTGRES:
-    vector_store = PGVector(
-        embeddings=embedding_model,
-        collection_name="embedded_schema",
-        connection=DATABASE_URL,
-        use_jsonb=True,
+# Initialize PostgreSQL vector store
+vector_store = PGVector(
+    embeddings=embedding_model,
+    collection_name="embedded_schema",
+    connection=DATABASE_URL,
+    use_jsonb=True,
+)
+
+# Database connection for app data
+def get_db_connection():
+    return psycopg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
     )
-else:
-    vector_store = Chroma(
-        collection_name="embedded_schema",
-        embedding_function=embedding_model,
-        persist_directory="./embedded_schema"
-    )
+
+# Initialize chat table
+def init_chat_table():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chats (
+                    chat_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    conversation JSONB NOT NULL,
+                    tenant_id TEXT,
+                    metabase_url TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
+                CREATE INDEX IF NOT EXISTS idx_chats_tenant_id ON chats(tenant_id);
+            """)
+            conn.commit()
+
+# Initialize chat table on startup
+init_chat_table()
 
 def get_sql(sql, db_id, metabase_url):
     ds_req = {
@@ -178,7 +216,7 @@ def get_stream(input, model):
 
 def get_table_schemas():
     schema = requests.get(
-        f"{MB_URL}/api/database/{DB_ID}/metadata",
+        f"{os.getenv('MB_EMBED_URL')}/api/database/{os.getenv('MB_EMBED_ID')}/metadata",
         headers=headers
     ).json()
 
@@ -368,32 +406,46 @@ def generate_embed_url(card_id: int, metabase_url) -> str:
 def change_display():
     if request.method == "POST":
         data = request.get_json()
-        mode = data.get("mode") if data else None
-        card_id = data.get("card_id") if data else None
-        x_field = data.get("x_field") if data else None
-        y_field = data.get("y_field") if data else None
-        visualization_options = data.get("visualization_options") if data else None
+        try:
+            mode = data.get("mode")
+            card_id = data.get("card_id")
+            x_field = data.get("x_field") 
+            y_field = data.get("y_field") 
+            metabase_url = data.get("metabase_url")
+            visualization_options = data.get("visualization_options")
+        except:
+            return abort(400, "Data is required")
+        
         if card_id == None or mode == None or x_field == None or y_field == None:
             return abort(400, "Missing inputs")
 
-        r2 = requests.put(f"{MB_URL}/api/card/{card_id}",
+        r2 = requests.put(f"{metabase_url}/api/card/{card_id}",
             headers=headers,
             json={"display": mode,
                 "visualization_settings": {
                     "graph.dimensions": x_field,
                     "graph.metrics": y_field,
+                    "pie.dimension": x_field,
+                    "pie.metric": y_field[0] if len(y_field) > 0 else "",
                     "map.region": "1c5d50ee-4389-4593-37c1-fa8d4687ff4c"
                 }
             })
         if r2.status_code != 200:
             raise Exception(f"HTTP {r2.status_code}: {r2.text}")
-        embed_url = generate_embed_url(card_id)
+        embed_url = generate_embed_url(card_id, metabase_url)
         return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field, "visualization_options": visualization_options}, 200
     return ""
 
-@app.route("/api/delete/<int:card_id>")
-def delete_question(card_id: int):
-    r = requests.delete(f"{MB_URL}/api/card/{card_id}", headers=headers)
+@app.route("/api/delete")
+def delete_question():
+    data = request.get_json()
+    try:
+        card_id = data.get("card_id")
+        metabase_url = data.get("metabase_url")
+    except:
+        return abort(400, "Data is required")
+    
+    r = requests.delete(f"{metabase_url}/api/card/{card_id}", headers=headers)
     if r.status_code != 200 and r.status_code != 204:
         return {"success": False}
     return {"success": True}
@@ -403,14 +455,14 @@ async def ask():
     if request.method == "POST":
 
         data = request.get_json()
-        if data:
+        try:
             question = data.get("question") 
             conversation = data.get("conversation") 
             metabase_url = data.get("metabase_url")
             db_id = 3 if data.get("tenant_id") == "tenant123" else -1 # TODO: better way of mapping tenant id to MB DB id
             collection_id = data.get("collection_id") 
 
-        else:
+        except:
             return abort(400, "Data is required")
         
         if None in (metabase_url, db_id, collection_id):
@@ -526,6 +578,145 @@ ORDER BY
         return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""
 
+# Chat endpoints
+@app.route("/api/chats", methods=["POST"])
+def get_chats():
+    """Get all chats for a user"""
+    data = request.get_json()
+    try:
+        user_id = data.get("user_id")
+        tenant_id = data.get("tenant_id")
+        
+        if not user_id:
+            return abort(400, "user_id is required")
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT chat_id, title, created_at, updated_at 
+                    FROM chats 
+                    WHERE user_id = %s AND tenant_id = %s 
+                    ORDER BY updated_at DESC
+                """, (user_id, tenant_id))
+                
+                chats = []
+                for row in cur.fetchall():
+                    chats.append({
+                        "id": str(row[0]),
+                        "title": row[1],
+                        "created_at": row[2].isoformat(),
+                        "updated_at": row[3].isoformat()
+                    })
+                
+                return chats, 200
+                
+    except Exception as e:
+        print(f"Error getting chats: {e}")
+        return abort(500, "Internal server error")
+
+@app.route("/api/chats/<chat_id>", methods=["POST"])
+def get_chat(chat_id):
+    """Get a specific chat"""
+    data = request.get_json()
+    try:
+        user_id = data.get("user_id")
+        
+        if not user_id:
+            return abort(400, "user_id is required")
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT conversation 
+                    FROM chats 
+                    WHERE chat_id = %s AND user_id = %s
+                """, (chat_id, user_id))
+                
+                row = cur.fetchone()
+                if not row:
+                    return abort(404, "Chat not found")
+                
+                return {"conversation": row[0]}, 200
+                
+    except Exception as e:
+        print(f"Error getting chat: {e}")
+        return abort(500, "Internal server error")
+
+@app.route("/api/chats/save", methods=["POST"])
+def save_chat():
+    """Save or update a chat"""
+    data = request.get_json()
+    try:
+        user_id = data.get("user_id")
+        tenant_id = data.get("tenant_id")
+        metabase_url = data.get("metabase_url")
+        chat_id = data.get("chat_id")
+        title = data.get("title")
+        conversation = data.get("conversation")
+        
+        if not all([user_id, title, conversation]):
+            return abort(400, "user_id, title, and conversation are required")
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if chat_id:
+                    # Update existing chat
+                    cur.execute("""
+                        UPDATE chats 
+                        SET title = %s, conversation = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE chat_id = %s AND user_id = %s
+                        RETURNING chat_id
+                    """, (title, json.dumps(conversation), chat_id, user_id))
+                    
+                    row = cur.fetchone()
+                    if not row:
+                        return abort(404, "Chat not found")
+                    
+                    result_chat_id = str(row[0])
+                else:
+                    # Create new chat
+                    cur.execute("""
+                        INSERT INTO chats (user_id, tenant_id, metabase_url, title, conversation)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING chat_id
+                    """, (user_id, tenant_id, metabase_url, title, json.dumps(conversation)))
+                    
+                    result_chat_id = str(cur.fetchone()[0])
+                
+                conn.commit()
+                return {"chat_id": result_chat_id}, 200
+                
+    except Exception as e:
+        print(f"Error saving chat: {e}")
+        return abort(500, "Internal server error")
+
+@app.route("/api/chats/<chat_id>", methods=["DELETE"])
+def delete_chat(chat_id):
+    """Delete a chat"""
+    data = request.get_json()
+    try:
+        user_id = data.get("user_id")
+        
+        if not user_id:
+            return abort(400, "user_id is required")
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DELETE FROM chats 
+                    WHERE chat_id = %s AND user_id = %s
+                """, (chat_id, user_id))
+                
+                if cur.rowcount == 0:
+                    return abort(404, "Chat not found")
+                
+                conn.commit()
+                return {"success": True}, 200
+                
+    except Exception as e:
+        print(f"Error deleting chat: {e}")
+        return abort(500, "Internal server error")
+
 # Health check
 @app.route("/")
 def health_check():
@@ -536,4 +727,5 @@ if len(sys.argv) > 1 and sys.argv[1] == "g":
     embed_schema()
     print("Finished Embedding.")
 else:
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")
+    app.run(host="0.0.0.0", port=5000, debug=app.config['DEBUG'], use_reloader=app.config['DEBUG'])

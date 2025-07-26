@@ -39,61 +39,11 @@
 
 .chat-container {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   height: 100%;
   flex: 1;
 }
 
-.turn-navigation {
-  height: 56px;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.nav-btn {
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #6c757d;
-  transition: all 0.2s ease;
-}
-
-.nav-btn:hover:not(:disabled) {
-  background: #e9ecef;
-  color: #495057;
-  border-color: #adb5bd;
-}
-
-.nav-btn:disabled {
-  background: #f8f9fa;
-  color: #adb5bd;
-  border-color: #e9ecef;
-  cursor: default;
-  opacity: 0.6;
-}
-
-.turn-counter {
-  font-size: 0.875rem;
-  color: #6c757d;
-  font-weight: 500;
-  min-width: 60px;
-  text-align: center;
-}
 
 /* Iframe-specific styling */
 .iframe-embeddable .container {
@@ -225,7 +175,7 @@
   margin-left: 10vw;
   margin-right: 10vw;
   position: relative;
-  padding: 20px;
+  padding: 20px 20px 12px 20px;
   background:#fff; 
   box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
   border-radius: 40px;
@@ -241,6 +191,82 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 16px;
+}
+
+.bottom-left-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.action-button:hover {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.action-button.delete-action:hover {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.action-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-button.nav-button:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: #adb5bd;
+  cursor: default;
+  opacity: 0.6;
+}
+
+.action-button.nav-button:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+  color: #adb5bd;
+}
+
+.turn-counter {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .welcome-ask-row {

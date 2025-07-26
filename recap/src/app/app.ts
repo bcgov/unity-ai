@@ -205,10 +205,35 @@ export class App implements OnInit, OnDestroy {
   }
 
   async deleteQuestion(turn: Turn) {
-    await firstValueFrom(
-      this.apiService.deleteCard(turn.embed.card_id)
-    );
-    this.conversation = this.conversation.filter(t => t !== turn);
+    try {
+      // Delete the card from the backend
+      await firstValueFrom(
+        this.apiService.deleteCard(turn.embed.card_id)
+      );
+      
+      // Find the index of the turn being deleted
+      const deletedIndex = this.conversation.findIndex(t => t === turn);
+      
+      // Remove the turn from the conversation
+      this.conversation = this.conversation.filter(t => t !== turn);
+      
+      // Adjust currentTurnIndex if necessary
+      if (deletedIndex <= this.currentTurnIndex && this.currentTurnIndex > 0) {
+        this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
+      } else if (this.currentTurnIndex >= this.conversation.length) {
+        this.currentTurnIndex = Math.max(0, this.conversation.length - 1);
+      }
+      
+      // Update dropdown selection for the new current turn
+      this.updateDropdownSelection();
+      
+      // Save the updated conversation to the database
+      await this.saveChat();
+      
+    } catch (error) {
+      // Handle error silently or show user feedback
+      console.error('Error deleting question:', error);
+    }
   }
 
   async changeDisplay(turn: Turn, mode: string) {

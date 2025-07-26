@@ -324,6 +324,7 @@ async def nl_to_sql(question, past_questions, db_id, metabase_url):
         tasks = [fetch_chat_completion(prompt, MODEL, session, i) for i in range(K)]
         completions = await asyncio.gather(*tasks)
     # completions = [get_stream(prompt, MODEL)]
+    print(completions)
 
     candidates = []
     for raw in completions:

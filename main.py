@@ -436,7 +436,7 @@ def change_display():
         return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field, "visualization_options": visualization_options}, 200
     return ""
 
-@app.route("/api/delete")
+@app.route("/api/delete", methods=["GET", "POST"])
 def delete_question():
     data = request.get_json()
     try:
@@ -575,7 +575,7 @@ ORDER BY
         card_id = create_question(sql, db_id, collection_id, metadata['title'], metabase_url)
         embed_url = generate_embed_url(card_id, metabase_url)
         # print({"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql})
-        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
+        return {"url": embed_url, "card_id": card_id, "x_field": metadata['x_axis'], "y_field": metadata['y_axis'], "title": metadata["title"], "visualization_options": metadata['visualization_options'], "SQL": sql}, 200
     return ""
 
 # Chat endpoints

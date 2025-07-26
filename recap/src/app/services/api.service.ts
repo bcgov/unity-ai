@@ -80,7 +80,7 @@ export class ApiService {
   }
 
   deleteCard<T>(cardId: number): Observable<T> {
-    return this.post<T>('/change_display', {
+    return this.post<T>('/delete', {
       card_id: cardId
     });
   }

@@ -45,13 +45,18 @@
 }
 
 .turn-navigation {
+  height: 56px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
 }
 
 .nav-btn {
@@ -78,7 +83,7 @@
   background: #f8f9fa;
   color: #adb5bd;
   border-color: #e9ecef;
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.6;
 }
 
@@ -114,28 +119,13 @@
 /* ---------- chat row ---------- */
 .turns {
   height: 100%;
-  overflow-y: scroll;
+  overflow: hidden;
   padding: 0 15vw 0 15vw;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 transparent;
+  position: relative;
 }
 
-.turns::-webkit-scrollbar {
-  width: 8px;
-}
-
-.turns::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.turns::-webkit-scrollbar-thumb {
-  background-color: #cbd5e0;
-  border-radius: 4px;
-  border: 2px solid transparent;
-}
-
-.turns::-webkit-scrollbar-thumb:hover {
-  background-color: #a0aec0;
+.turns * {
+  pointer-events: auto;
 }
 
 .turn {
@@ -230,16 +220,103 @@
 .toolbar button:hover{transform:translateY(-1px);}
 
 /* ask bar */
+.ask-row-container {
+  margin-bottom: 16px;
+  margin-left: 10vw;
+  margin-right: 10vw;
+  position: relative;
+  padding: 20px;
+  background:#fff; 
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  border-radius: 40px;
+}
+
 .ask-row {
   display: flex;
   gap: 12px;
-  padding: 8px 8px 8px 24px;
-  background:#fff; 
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-  border-radius: 60px;
-  margin-bottom: 16px;
-  margin-left: 15vw;
-  margin-right: 15vw;
+}
+
+.ask-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.welcome-ask-row {
+  margin-left: 0px;
+  margin-right: 0px;
+  padding: 10px 10px 10px 24px;
+}
+
+/* Visualization dropdown */
+.visualization-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  width: 120px;
+  box-sizing: border-box;
+  text-align: center;
+  border-color: #dee2e6;
+}
+
+.dropdown-trigger:hover {
+  background: #f8f9fa;
+  
+}
+
+.dropdown-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  width: 120px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-radius: 0;
+  margin: 0;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-item:hover {
+  background-color: #e9ecef;
 }
 
 .ask-row input[type="text"] {
@@ -259,7 +336,7 @@
 
 }
 
-.ask-row button {
+.ask-question-btn {
   background: var(--mb-blue-600);
   color: #fff;
   border: none;
@@ -274,11 +351,11 @@
   justify-content: center;
 }
 
-.ask-row button svg {
+.ask-question-btn svg {
   color: white;
 }
 
-.ask-row button:hover  {
+.ask-question-btn:hover  {
   background: var(--mb-blue-700);
   box-shadow: var(--mb-shadow-sm);
 }

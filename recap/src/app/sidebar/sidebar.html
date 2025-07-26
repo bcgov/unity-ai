@@ -2,18 +2,18 @@
   <div class="sidebar-header">
     <button class="new-chat-btn" (click)="onNewChat()">
       <span class="new-chat-icon">+</span>
-      New Chat
+      New Report
     </button>
-    <h2>Chats</h2>
+    <h2>Reports</h2>
   </div>
 
   <div class="sidebar-content">
     <div *ngIf="loading" class="loading">
-      Loading chats...
+      Loading reports...
     </div>
 
     <div *ngIf="!loading && chats.length === 0" class="empty-state">
-      No chats yet. Start a new conversation!
+      No reports yet. Start a new one!
     </div>
 
     <div class="chat-list" *ngIf="!loading && chats.length > 0">

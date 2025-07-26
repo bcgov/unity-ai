@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, NgZone, OnInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, NgZone, OnInit, OnDestroy } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -18,7 +18,7 @@ import { environment } from '../environments/environment';
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   protected title = 'recap';
   protected api_url = environment.apiUrl;
   protected mb_url = environment.mbUrl;
@@ -27,6 +27,8 @@ export class App implements OnInit {
   sidebarOpen: boolean = true;
   currentChatId: string | null = null;
   currentTurnIndex: number = 0;
+  visualizationDropdownOpen: boolean = false;
+  selectedVisualization: string = 'table';
 
   constructor(
     private sanitizer: DomSanitizer,
@@ -51,6 +53,36 @@ export class App implements OnInit {
         document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial;"><h2>Authentication Required</h2><p>Invalid or missing authentication token.</p></div>';
         return;
       }
+    }
+
+    // Add window resize listener to maintain scroll position
+    window.addEventListener('resize', this.resizeListener);
+    
+    // Add click listener to close dropdown when clicking outside
+    document.addEventListener('click', this.handleDocumentClick);
+  }
+
+  private onWindowResize(): void {
+    // Debounce resize events to avoid excessive scrolling
+    clearTimeout(this.resizeTimeout);
+    this.resizeTimeout = setTimeout(() => {
+      if (this.conversation.length > 0) {
+        this.scrollToTurn(this.currentTurnIndex);
+      }
+    }, 150);
+  }
+
+  private resizeTimeout: any;
+  private resizeListener = () => this.onWindowResize();
+  private handleDocumentClick = (event: Event) => this.onDocumentClick(event);
+
+  private onDocumentClick(event: Event): void {
+    const target = event.target as HTMLElement;
+    const dropdownElement = target.closest('.visualization-dropdown');
+    
+    // If click is outside the dropdown, close it
+    if (!dropdownElement && this.visualizationDropdownOpen) {
+      this.visualizationDropdownOpen = false;
     }
   }
 
@@ -85,12 +117,87 @@ export class App implements OnInit {
     turn.sqlPanelOpen = !turn.sqlPanelOpen;
   }
 
+  private observerMap = new Map<any, IntersectionObserver>();
+
   // In your component class, add a method:
   onIframeLoad(turn: any) {
-    // Give more time for the Metabase embed to fully render
+    // Start observing the iframe for content stability
+    this.observeIframeStability(turn);
+  }
+
+  private observeIframeStability(turn: any): void {
+    // Clean up any existing observer for this turn
+    if (this.observerMap.has(turn)) {
+      this.observerMap.get(turn)?.disconnect();
+      this.observerMap.delete(turn);
+    }
+
+    // Find the iframe element for this turn
+    const iframeElement = document.querySelector(`iframe[src*="${turn.embed?.card_id}"]`) as HTMLIFrameElement;
+    if (!iframeElement) {
+      // Fallback to timeout if iframe not found
+      setTimeout(() => turn.iframeLoaded = true, 2000);
+      return;
+    }
+
+    let stableCount = 0;
+    let lastHeight = 0;
+    let lastWidth = 0;
+    const requiredStableChecks = 3;
+    const checkInterval = 500;
+
+    const checkStability = () => {
+      try {
+        // Check if iframe dimensions have stabilized
+        const currentHeight = iframeElement.offsetHeight;
+        const currentWidth = iframeElement.offsetWidth;
+
+        // Also check if the iframe has actual content by looking at its document
+        let hasContent = false;
+        try {
+          const iframeDoc = iframeElement.contentDocument || iframeElement.contentWindow?.document;
+          if (iframeDoc && iframeDoc.body) {
+            // Check if there's meaningful content (not just loading states)
+            const bodyContent = iframeDoc.body.innerText || '';
+            const hasElements = iframeDoc.body.children.length > 0;
+            hasContent = bodyContent.length > 10 || hasElements;
+          }
+        } catch (crossOriginError) {
+          // Cross-origin iframe, can't access content - rely on dimensions only
+          hasContent = true;
+        }
+
+        if (currentHeight === lastHeight && currentWidth === lastWidth && currentHeight > 0 && hasContent) {
+          stableCount++;
+          if (stableCount >= requiredStableChecks) {
+            // Content appears stable and has actual content
+            turn.iframeLoaded = true;
+            clearInterval(stabilityChecker);
+            return;
+          }
+        } else {
+          stableCount = 0;
+        }
+
+        lastHeight = currentHeight;
+        lastWidth = currentWidth;
+      } catch (error) {
+        // If we can't access iframe properties, fall back to timeout
+        clearInterval(stabilityChecker);
+        setTimeout(() => turn.iframeLoaded = true, 1000);
+      }
+    };
+
+    // Check stability every 500ms
+    const stabilityChecker = setInterval(checkStability, checkInterval);
+
+    // Maximum timeout as fallback (10 seconds)
     setTimeout(() => {
-      turn.iframeLoaded = true;
-    }, 3000);
+      clearInterval(stabilityChecker);
+      if (!turn.iframeLoaded) {
+        turn.iframeLoaded = true;
+      }
+    }, 10000);
   }
 
   async redirectToMB(turn: Turn) {
@@ -110,6 +217,8 @@ export class App implements OnInit {
         this.apiService.changeDisplay<Embed>(turn.embed.card_id, mode, turn.embed.x_field, turn.embed.y_field)
       );
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(res.url + '&cb=' + Date.now());
+      // Update the current visualization in the embed
+      turn.embed.current_visualization = mode;
       // turn.embed = res;
     } catch (error) {
       // Handle error silently
@@ -126,8 +235,12 @@ export class App implements OnInit {
       alert("Please enter a question.");
       return;
     }
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
     this.conversation.push(turn);
+    
+    // Set the new turn as the current turn for navigation
+    this.currentTurnIndex = this.conversation.length - 1;
+    
     this.scrollToBottom();   
     this.question = "";
     try {
@@ -136,7 +249,18 @@ export class App implements OnInit {
       turn.embed = await firstValueFrom(
         this.apiService.askQuestion<Embed>(turn.question, this.conversation)
       );
-      turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
+      
+      // If a specific visualization type is selected (not table), change the display
+      if (this.selectedVisualization !== 'table' && turn.embed.visualization_options?.includes(this.selectedVisualization)) {
+        const displayResult = await firstValueFrom(
+          this.apiService.changeDisplay<Embed>(turn.embed.card_id, this.selectedVisualization, turn.embed.x_field, turn.embed.y_field)
+        );
+        turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(displayResult.url + '&cb=' + Date.now());
+        turn.embed.current_visualization = this.selectedVisualization;
+      } else {
+        turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
+        turn.embed.current_visualization = 'table'; // Default to table
+      }
       await this.saveChat();
     } catch (error) {
       turn.iframeLoaded = true;
@@ -174,6 +298,7 @@ export class App implements OnInit {
     this.conversation = [];
     this.currentChatId = null;
     this.currentTurnIndex = 0;
+    this.selectedVisualization = 'table'; // Reset to default
   }
 
   async loadChat(chatId: string): Promise<void> {
@@ -195,6 +320,9 @@ export class App implements OnInit {
       this.currentChatId = chatId;
       this.currentTurnIndex = Math.max(0, this.conversation.length - 1);
       
+      // Update dropdown selection based on the current turn
+      this.updateDropdownSelection();
+      
       // Scroll to bottom instantly after loading chat
       this.scrollToBottomInstant();
     } catch (error) {
@@ -210,8 +338,12 @@ export class App implements OnInit {
         throw new Error('Not authenticated');
       }
 
+      // Use the most recent embed's title, or fall back to the first question
+      const mostRecentTurn = this.conversation[this.conversation.length - 1];
+      const chatTitle = mostRecentTurn?.embed?.title || this.conversation[0]?.question || 'New Chat';
+
       const response = await firstValueFrom(
-        this.apiService.saveChat<{chat_id: string}>(this.currentChatId, this.conversation, this.conversation[0]?.question || 'New Chat')
+        this.apiService.saveChat<{chat_id: string}>(this.currentChatId, this.conversation, chatTitle)
       );
 
       this.currentChatId = response.chat_id;
@@ -229,6 +361,7 @@ export class App implements OnInit {
     if (this.currentTurnIndex > 0) {
       this.currentTurnIndex--;
       this.scrollToTurn(this.currentTurnIndex);
+      this.updateDropdownSelection();
     }
   }
 
@@ -236,6 +369,7 @@ export class App implements OnInit {
     if (this.currentTurnIndex < this.conversation.length - 1) {
       this.currentTurnIndex++;
       this.scrollToTurn(this.currentTurnIndex);
+      this.updateDropdownSelection();
     }
   }
 
@@ -260,6 +394,85 @@ export class App implements OnInit {
         });
       }
     }
+  }
+
+  toggleVisualizationDropdown(): void {
+    this.visualizationDropdownOpen = !this.visualizationDropdownOpen;
+  }
+
+  async selectVisualization(type: string): Promise<void> {
+    this.selectedVisualization = type;
+    this.visualizationDropdownOpen = false;
+    
+    // If we have a current turn, apply the visualization change immediately
+    if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
+      const currentTurn = this.conversation[this.currentTurnIndex];
+      if (currentTurn.embed && currentTurn.embed.card_id) {
+        await this.changeDisplay(currentTurn, type);
+        // Save the chat to persist the visualization change
+        await this.saveChat();
+      }
+    }
+  }
+
+  getVisualizationDisplayName(type: string): string {
+    const names: { [key: string]: string } = {
+      'table': 'Table',
+      'bar': 'Bar Chart',
+      'line': 'Line Chart',
+      'pie': 'Pie Chart',
+      'map': 'Map'
+    };
+    return names[type] || type;
+  }
+
+  getAvailableVisualizationOptions(): string[] {
+    // Always include table as it's the default
+    const options = ['table'];
+    
+    // If we have a conversation, get options from the current turn
+    if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
+      const currentTurn = this.conversation[this.currentTurnIndex];
+      if (currentTurn.embed?.visualization_options) {
+        // Add available options from the current turn, avoiding duplicates
+        currentTurn.embed.visualization_options.forEach(option => {
+          if (!options.includes(option)) {
+            options.push(option);
+          }
+        });
+      }
+    } else {
+      // If no conversation yet, show all possible options
+      options.push('bar', 'line', 'pie', 'map');
+    }
+    
+    return options;
+  }
+
+  updateDropdownSelection(): void {
+    if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
+      const currentTurn = this.conversation[this.currentTurnIndex];
+      if (currentTurn.embed?.current_visualization) {
+        this.selectedVisualization = currentTurn.embed.current_visualization;
+      } else if (currentTurn.embed) {
+        // For older chats without current_visualization, default to table and save it
+        this.selectedVisualization = 'table';
+        currentTurn.embed.current_visualization = 'table';
+      } else {
+        // Default to table if no embed data
+        this.selectedVisualization = 'table';
+      }
+    } else {
+      // No conversation or invalid turn index
+      this.selectedVisualization = 'table';
+    }
+  }
+
+  ngOnDestroy(): void {
+    // Clean up event listeners and timeouts
+    window.removeEventListener('resize', this.resizeListener);
+    document.removeEventListener('click', this.handleDocumentClick);
+    clearTimeout(this.resizeTimeout);
   }
 
 }

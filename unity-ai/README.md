@@ -26,7 +26,7 @@ The application will be available at:
 ### 3. Development Mode
 For development with live reload:
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker-compose --env-file ../.env -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 Development mode features:

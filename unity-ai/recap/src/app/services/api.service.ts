@@ -20,7 +20,6 @@ export class ApiService {
       ...body,
       metabase_url: this.authService.getMetabaseUrl(),
       tenant_id: this.authService.getTenantId(),
-      collection_id: this.authService.getCollectionId(),
       user_id: this.authService.getUserId()
     };
   }

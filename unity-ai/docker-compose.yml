@@ -58,7 +58,12 @@ services:
   #       condition: service_healthy
 
   frontend:
-    build: ./recap
+    build: 
+      context: ./recap
+      args:
+        - JWT_SECRET=${JWT_SECRET}
+    env_file:
+      - ../.env
     ports:
       - "80:80"
     depends_on:

@@ -4,13 +4,19 @@ services:
     build:
       context: ./recap
       dockerfile: Dockerfile.dev
+      args:
+        - JWT_SECRET=${JWT_SECRET}
     ports:
       - "80:80"
+    env_file:
+      - ../.env
     volumes:
       - ./recap/src:/app/src
       - ./recap/angular.json:/app/angular.json
       - ./recap/package.json:/app/package.json
       - ./recap/tsconfig.json:/app/tsconfig.json
+      # Exclude environment files to prevent overwriting the JWT_SECRET replacement
+      - /app/src/environments
     environment:
       - NODE_ENV=development
     networks:

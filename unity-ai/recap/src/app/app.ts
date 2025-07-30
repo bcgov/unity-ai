@@ -21,7 +21,6 @@ import { environment } from '../environments/environment';
 export class App implements OnInit, OnDestroy {
   protected title = 'recap';
   protected api_url = environment.apiUrl;
-  protected mb_url = environment.mbUrl;
   question: string = "";
   conversation: Turn[] = [];
   sidebarOpen: boolean = true;
@@ -201,7 +200,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   async redirectToMB(turn: Turn) {
-    return window.open(`${this.mb_url}/question/${turn.embed.card_id}`, '_blank');
+    return window.open(`${this.authService.getMetabaseUrl()}/question/${turn.embed.card_id}`, '_blank');
   }
 
   async deleteQuestion(turn: Turn) {

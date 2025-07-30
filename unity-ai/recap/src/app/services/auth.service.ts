@@ -1,12 +1,15 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface JwtPayload {
-  tenant_id?: string;
-  collection_id?: number;
-  metabase_url?: string;
-  exp?: number;
   user_id?: string;
+  tenant?: string;
+  mb_url?: string;
+  jti?: string;
+  exp?: number;
+  iss?: string;
+  aud?: string;
   [key: string]: any;
 }
 
@@ -50,38 +53,85 @@ export class AuthService {
 
   async isAuthenticated(): Promise<boolean> {
     const token = this.getToken();
-    if (!token) return false;
+    
+    // Check for null, undefined, empty string, or whitespace-only strings
+    if (!token || token.trim() === '') {
+      return false;
+    }
+    
+    // Check if token has the correct JWT format (three parts separated by dots)
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return false;
+    }
+    
+    // Check that each part is not empty
+    if (parts.some(part => !part || part.trim() === '')) {
+      return false;
+    }
     
     try {
       // First validate the signature
       const isValidSignature = await this.validateSignature(token);
-      if (!isValidSignature) return false;
+      if (!isValidSignature) {
+        console.warn('JWT signature validation failed');
+        return false;
+      }
       
       const payload = this.decodeToken(token);
-      if (!payload || !payload.exp) return false;
+      if (!payload || !payload.exp) {
+        console.warn('JWT payload missing or no expiration');
+        return false;
+      }
+      
+      // Check expiration
       const expiry = payload.exp * 1000;
-      return Date.now() < expiry;
-    } catch {
+      const isExpired = Date.now() >= expiry;
+      if (isExpired) {
+        console.warn('JWT token has expired');
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('JWT authentication error:', error);
       return false;
     }
   }
 
   decodeToken(token?: string): JwtPayload | null {
     const jwtToken = token || this.getToken();
-    if (!jwtToken) return null;
+    
+    // Strict validation
+    if (!jwtToken || jwtToken.trim() === '') {
+      return null;
+    }
     
     try {
       // Split JWT into parts
       const parts = jwtToken.split('.');
-      if (parts.length !== 3) return null;
+      if (parts.length !== 3) {
+        return null;
+      }
+      
+      // Validate each part exists and is not empty
+      const [header, payload, signature] = parts;
+      if (!header || !payload || !signature) {
+        return null;
+      }
       
       // Decode base64url payload (second part)
-      const base64Payload = parts[1];
-      const base64 = this.base64urlDecode(base64Payload);
-      const payload = JSON.parse(base64);
+      const base64 = this.base64urlDecode(payload);
+      const decodedPayload = JSON.parse(base64);
       
-      return payload as JwtPayload;
-    } catch {
+      // Validate payload is an object
+      if (typeof decodedPayload !== 'object' || decodedPayload === null) {
+        return null;
+      }
+      
+      return decodedPayload as JwtPayload;
+    } catch (error) {
+      console.error('Token decode error:', error);
       return null;
     }
   }
@@ -107,8 +157,14 @@ export class AuthService {
 
   async validateSignature(token: string): Promise<boolean> {
     try {
-      // You'll need to configure this secret - consider environment variable or configuration
-      const secret = 'your-super-secret-key-keep-this-safe'; // TODO: Move to environment config
+      // Validate token is not empty
+      if (!token || token.trim() === '') {
+        return false;
+      }
+      
+      // Get secret from environment configuration
+      const secret = environment.jwtSecret;
+      console.log(secret);
       
       const parts = token.split('.');
       if (parts.length !== 3) {
@@ -116,6 +172,12 @@ export class AuthService {
       }
       
       const [header, payload, signature] = parts;
+      
+      // Validate each part is not empty
+      if (!header || !payload || !signature) {
+        return false;
+      }
+      
       const signingInput = `${header}.${payload}`;
       
       // Import secret key for HMAC
@@ -140,6 +202,7 @@ export class AuthService {
       
       return isValid;
     } catch (error) {
+      console.error('Signature validation error:', error);
       return false;
     }
   }
@@ -166,17 +229,12 @@ export class AuthService {
 
   getTenantId(): string | null {
     const payload = this.decodeToken();
-    return payload?.tenant_id || null;
-  }
-
-  getCollectionId(): number | null {
-    const payload = this.decodeToken();
-    return payload?.collection_id || null;
+    return payload?.tenant || null;
   }
 
   getMetabaseUrl(): string | null {
     const payload = this.decodeToken();
-    return payload?.metabase_url || null;
+    return payload?.mb_url || null;
   }
 
   getUserId(): string | null {

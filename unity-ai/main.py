@@ -458,13 +458,25 @@ async def ask():
             question = data.get("question") 
             conversation = data.get("conversation") 
             metabase_url = data.get("metabase_url")
-            db_id = 3 if data.get("tenant_id") == "tenant123" else -1 # TODO: better way of mapping tenant id to MB DB id
-            collection_id = data.get("collection_id") 
+            tenant_id = data.get("tenant_id")
+            
+            # Tenant to database ID mapping
+            tenant_db_mapping = {
+                "Cyrus Org": 3,
+                "UnknownTenant": 3,  # Default for unknown tenants
+                # Add more tenant mappings here as needed
+            }
+            
+            db_id = tenant_db_mapping.get(tenant_id, -1)
+            collection_id = 47  # Default collection ID for all tenants
 
         except:
             return abort(400, "Data is required")
         
-        if None in (metabase_url, db_id, collection_id):
+        print(f"Request details - Tenant: {tenant_id}, DB ID: {db_id}, Collection: {collection_id}, Metabase URL: {metabase_url}")
+        
+        if None in (metabase_url, collection_id) or db_id == -1:
+            print(f"Authorization failed - Missing: metabase_url={metabase_url}, db_id={db_id}, collection_id={collection_id}")
             time.sleep(1)
             return abort(401, "Authorization required")
         
@@ -479,7 +491,7 @@ WHERE applicants."SubSector" IS NOT NULL
 AND applicants."SubSector" != '' 
 AND LOWER(applicants."SubSector") != 'other'
 GROUP BY applicants."SubSector"
-ORDER BY TotalApplications DESC
+ORDER BY TotalApplications DESC 
 LIMIT 15; 
             '''
             metadata = {
@@ -721,10 +733,11 @@ def delete_chat(chat_id):
 def health_check():
     return "Backend is working!"
 
-if len(sys.argv) > 1 and sys.argv[1] == "g":
-    print("Beginning schema embedding process...")
-    embed_schema()
-    print("Finished embedding process.")
-else:
-    print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")
-    app.run(host="0.0.0.0", port=5000, debug=app.config['DEBUG'], use_reloader=app.config['DEBUG'])
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "g":
+        print("Beginning schema embedding process...")
+        embed_schema()
+        print("Finished embedding process.")
+    else:
+        print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")
+        app.run(host="0.0.0.0", port=5000, debug=app.config['DEBUG'], use_reloader=app.config['DEBUG'])

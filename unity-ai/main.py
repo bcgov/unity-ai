@@ -162,7 +162,7 @@ async def fetch_chat_completion(input, model, session, index):
     print("tokens:", len(enc.encode(input)))
     url = os.getenv("COMPLETION_ENDPOINT")
     headers = {
-        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+        "Authorization": f"Bearer {os.getenv('COMPLETION_KEY')}",
         "Content-Type": "application/json"
     }
     json_data = {
@@ -183,36 +183,6 @@ async def fetch_chat_completion(input, model, session, index):
         print("Tokens used:", data["usage"]["total_tokens"])
         # print(data["choices"][0]["message"]["content"])
         return data["choices"][0]["message"]["content"]
-
-def get_stream(input, model):
-    api_url = "https://api.openai.com/v1/responses"
-    api_key = os.getenv("OPENAI_API_KEY")
-    headers = {
-    "Authorization": f"Bearer {api_key}",
-    "Content-Type": "application/json",
-    }
-
-    data = {
-        "model": model,
-        "input": input,
-        "stream": True,
-    }
-
-    output = ""
-
-    with requests.post(api_url, headers=headers, json=data, stream=True) as response:
-        for chunk in response.iter_lines():
-            if chunk:
-                try:
-                    chunk_data = json.loads(chunk.decode("utf-8").lstrip("data: "))
-                    if "delta" in chunk_data and chunk_data["delta"]:
-                        delta = chunk_data["delta"]
-                        # print(delta, end="")
-                        output += delta
-                except json.JSONDecodeError:
-                    pass
-
-    return output
 
 def get_table_schemas():
     schema = requests.get(
@@ -244,8 +214,34 @@ def get_table_schemas():
 
     return docs
 
+def purge_embeddings():
+    """Delete all existing embeddings from the vector store"""
+    print("Purging existing embeddings...")
+    try:
+        # Use the same connection method as get_db_connection()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Delete all records from the langchain_pg_embedding table for our collection
+                cur.execute("""
+                    DELETE FROM langchain_pg_embedding 
+                    WHERE collection_id IN (
+                        SELECT uuid FROM langchain_pg_collection 
+                        WHERE name = %s
+                    )
+                """, ("embedded_schema",))
+                deleted_count = cur.rowcount
+                conn.commit()
+                print(f"Purged {deleted_count} existing embeddings")
+    except Exception as e:
+        print(f"Error purging embeddings: {e}")
+        raise
+
 def embed_schema():
+    # First purge existing embeddings
+    purge_embeddings()
     
+    # Then add new embeddings
+    print("Adding new embeddings...")
     vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas()])
 
     if EMBED_WORKSHEETS:
@@ -484,7 +480,7 @@ AND applicants."SubSector" != ''
 AND LOWER(applicants."SubSector") != 'other'
 GROUP BY applicants."SubSector"
 ORDER BY TotalApplications DESC
-LIMIT 15;
+LIMIT 15; 
             '''
             metadata = {
                 "title": "Approved Applications Per Subsector",
@@ -726,9 +722,9 @@ def health_check():
     return "Backend is working!"
 
 if len(sys.argv) > 1 and sys.argv[1] == "g":
-    print("Beginning Embedding into memory...")
+    print("Beginning schema embedding process...")
     embed_schema()
-    print("Finished Embedding.")
+    print("Finished embedding process.")
 else:
     print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")
     app.run(host="0.0.0.0", port=5000, debug=app.config['DEBUG'], use_reloader=app.config['DEBUG'])

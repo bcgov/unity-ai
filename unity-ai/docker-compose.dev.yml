@@ -31,7 +31,6 @@ services:
       - DB_PASSWORD=unity_pass
     env_file:
       - ../.env
-      - .env
     volumes:
       - .:/app
       - ./QDECOMP_examples.json:/app/QDECOMP_examples.json

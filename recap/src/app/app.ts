@@ -217,6 +217,24 @@ export class App implements OnInit, OnDestroy {
       // Remove the turn from the conversation
       this.conversation = this.conversation.filter(t => t !== turn);
       
+      // If this was the last question in the chat, delete the chat entirely
+      if (this.conversation.length === 0 && this.currentChatId) {
+        try {
+          await firstValueFrom(
+            this.apiService.deleteChat(this.currentChatId)
+          );
+          this.currentChatId = null;
+          
+          // Refresh the sidebar to remove the deleted chat
+          if (this.sidebar) {
+            this.sidebar.loadChats();
+          }
+        } catch (deleteError) {
+          console.error('Error deleting empty chat:', deleteError);
+        }
+        return; // Exit early since there's nothing left to update
+      }
+      
       // Adjust currentTurnIndex if necessary
       if (deletedIndex <= this.currentTurnIndex && this.currentTurnIndex > 0) {
         this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
@@ -260,6 +278,10 @@ export class App implements OnInit, OnDestroy {
       alert("Please enter a question.");
       return;
     }
+    
+    // Always reset to table visualization for new questions
+    this.selectedVisualization = 'table';
+    
     const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
     this.conversation.push(turn);
     
@@ -275,17 +297,10 @@ export class App implements OnInit, OnDestroy {
         this.apiService.askQuestion<Embed>(turn.question, this.conversation)
       );
       
-      // If a specific visualization type is selected (not table), change the display
-      if (this.selectedVisualization !== 'table' && turn.embed.visualization_options?.includes(this.selectedVisualization)) {
-        const displayResult = await firstValueFrom(
-          this.apiService.changeDisplay<Embed>(turn.embed.card_id, this.selectedVisualization, turn.embed.x_field, turn.embed.y_field)
-        );
-        turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(displayResult.url + '&cb=' + Date.now());
-        turn.embed.current_visualization = this.selectedVisualization;
-      } else {
-        turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
-        turn.embed.current_visualization = 'table'; // Default to table
-      }
+      // New questions always start as table view
+      turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);
+      turn.embed.current_visualization = 'table';
+      
       await this.saveChat();
     } catch (error) {
       turn.iframeLoaded = true;
@@ -422,7 +437,10 @@ export class App implements OnInit, OnDestroy {
   }
 
   toggleVisualizationDropdown(): void {
-    this.visualizationDropdownOpen = !this.visualizationDropdownOpen;
+    // Only toggle if there are other options available
+    if (this.hasOtherVisualizationOptions()) {
+      this.visualizationDropdownOpen = !this.visualizationDropdownOpen;
+    }
   }
 
   async selectVisualization(type: string): Promise<void> {
@@ -454,24 +472,31 @@ export class App implements OnInit, OnDestroy {
   getAvailableVisualizationOptions(): string[] {
     // Always include table as it's the default
     const options = ['table'];
+    const all_options = ['bar', 'line', 'pie', 'map'];
     
     // If we have a conversation, get options from the current turn
     if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
       const currentTurn = this.conversation[this.currentTurnIndex];
+      
       if (currentTurn.embed?.visualization_options) {
         // Add available options from the current turn, avoiding duplicates
         currentTurn.embed.visualization_options.forEach(option => {
-          if (!options.includes(option)) {
+          if (!options.includes(option) && all_options.includes(option)) {
             options.push(option);
           }
         });
       }
     } else {
       // If no conversation yet, show all possible options
-      options.push('bar', 'line', 'pie', 'map');
+      options.push(...all_options);
     }
     
     return options;
+  }
+
+  hasOtherVisualizationOptions(): boolean {
+    const availableOptions = this.getAvailableVisualizationOptions();
+    return availableOptions.some(option => option !== this.selectedVisualization);
   }
 
   updateDropdownSelection(): void {

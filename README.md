@@ -195,7 +195,7 @@ If you encounter connection issues with PostgreSQL:
 4. **pgvector extension**: Ensure the pgvector extension is installed (included in pgvector/pgvector:pg16 image)
 
 ### Database Requirements
-The application now requires PostgreSQL with the pgvector extension for vector embeddings storage. SQLite is no longer supported.
+The application now requires PostgreSQL with the pgvector extension for vector embeddings storage. 
 
 ### Port Conflicts
 - Docker uses ports 80 (frontend) and 5000 (backend)

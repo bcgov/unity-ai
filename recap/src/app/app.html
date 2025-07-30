@@ -38,11 +38,7 @@
       <div class="turns" #turnsContainer>
 
         <div *ngFor="let turn of conversation" class="turn">
-          <!-- <div class="bubble user">
-            {{ turn.question }}
-          </div> -->
           <div class="bubble bot">
-            <!-- <div *ngIf="turn.safeUrl == 'loading'" class="spinner-center"><div class="spinner"></div></div> -->
             <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
               <div class="sql-animation-container" #sqlAnimationContainer>
                 <sql-loader [parentScrollFn]="scrollSqlToBottom.bind(this)"></sql-loader>
@@ -91,18 +87,20 @@
                 [(ngModel)]="question"
                 placeholder="Refine the report..."
                 (keyup.enter)="askQuestion()" />
-          <!-- <button class="reset-btn" (click)="resetConversation()">Reset</button> -->
         </div>
         <div class="ask-row-bottom">
           <div class="bottom-left-controls">
             <div class="visualization-dropdown" [class.open]="visualizationDropdownOpen">
-              <button class="dropdown-trigger" (click)="toggleVisualizationDropdown()">
-                {{ getVisualizationDisplayName(selectedVisualization) }}
+              <button class="dropdown-trigger" 
+                      (click)="toggleVisualizationDropdown()"
+                      [class.disabled]="!hasOtherVisualizationOptions()">
+                <span>{{ getVisualizationDisplayName(selectedVisualization) }}</span>
               </button>
               <div class="dropdown-menu" *ngIf="visualizationDropdownOpen">
                 <button 
                   *ngFor="let option of getAvailableVisualizationOptions()" 
                   class="dropdown-item" 
+                  [hidden]="option === selectedVisualization"
                   (click)="selectVisualization(option)">
                   {{ getVisualizationDisplayName(option) }}
                 </button>
@@ -112,9 +110,9 @@
             <div *ngIf="conversation.length > 0 && currentTurnIndex >= 0 && currentTurnIndex < conversation.length" class="action-buttons">
               <button class="action-button" (click)="redirectToMB(conversation[currentTurnIndex])" title="View in Metabase">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 13V6C18 5.44772 17.5523 5 17 5H7C6.44772 5 6 5.44772 6 6V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M18 21C20.2091 21 22 19.2091 22 17C22 14.7909 20.2091 13 18 13C15.7909 13 14 14.7909 14 17C14 19.2091 15.7909 21 18 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M8 21H12.9C13.4523 21 13.9 20.5523 13.9 20V19C13.9 18.4477 13.4523 18 12.9 18H7C6.44772 18 6 17.5523 6 17V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M18 13V19C18 20.1046 17.1046 21 16 21H5C3.89543 21 3 20.1046 3 19V8C3 6.89543 3.89543 6 5 6H11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M10 14L21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
               
@@ -136,14 +134,14 @@
             </div>
             
             <div *ngIf="conversation.length > 1" class="nav-controls">
-              <button class="action-button nav-button" (click)="scrollToPreviousTurn()" [disabled]="currentTurnIndex <= 0" title="Previous Turn">
+              <button class="action-button nav-button" (click)="scrollToPreviousTurn()" [disabled]="currentTurnIndex <= 0" title="Previous Report">
                 <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
               <span class="turn-counter">{{currentTurnIndex + 1}} / {{conversation.length}}</span>
-              <button class="action-button nav-button" (click)="scrollToNextTurn()" [disabled]="currentTurnIndex >= conversation.length - 1" title="Next Turn">
+              <button class="action-button nav-button" (click)="scrollToNextTurn()" [disabled]="currentTurnIndex >= conversation.length - 1" title="Next Report">
                 <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(180deg);">
                   <path d="M24 6L24 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M12 18L24 6L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>

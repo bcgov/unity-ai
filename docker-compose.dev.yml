@@ -41,3 +41,17 @@ services:
       postgres:
         condition: service_healthy
     command: python -m flask --app main run --host=0.0.0.0 --port=5000 --reload
+
+    
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    networks:
+      - unity-ai-network
+    depends_on:
+      postgres:
+        condition: service_healthy

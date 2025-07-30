@@ -316,9 +316,9 @@ async def nl_to_sql(question, past_questions, db_id, metabase_url):
     newline = '\n'
     examples = [f"### Schema:{newline}{newline.join(ex['Schema'])}{newline}### Question:{newline}{ex['Question']}{newline}### Reasoning:{newline}{ex['Reasoning']}{newline}### SQL:{newline}{ex['SQL']}{newline}### Metadata:{newline}{json.dumps({'title': ex['title'], 'x_axis': ex['x_axis'], 'y_axis': ex['y_axis'], 'visualization_options': ex['visualization_options']})}" for ex in examples]
     past_question_string = f'Note that the previous question in this conversation was: "{past_questions[-2]["question"]}" and the generated SQL was: "{past_questions[-2]["SQL"]}. "' if len(past_questions) > 1 else ""
-    prompt = f"{f'{newline}{newline}'.join(examples)}{newline}{newline}### Schema:{newline}{retrieved_tables}{newline}### Question:{newline}The current date is {dt.datetime.now().strftime('%Y-%m-%d')}. {past_question_string}Please generate sql and metadata for the following question, with reasoning but no explanation: {question}{newline}### Reasoning:"
+    prompt = f"{f'{newline}{newline}'.join(examples)}{newline}{newline}### Schema:{newline}{retrieved_tables}{newline}### Question:{newline}The current date is {dt.datetime.now().strftime('%Y-%m-%d')}. {past_question_string}Please generate sql and metadata for the following question, with reasoning but no explanation. Please enable map option only for questions involving regional districts: {question}{newline}### Reasoning:"
 
-    # print(prompt)
+    print(prompt)
 
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_chat_completion(prompt, MODEL, session, i) for i in range(K)]
@@ -362,10 +362,12 @@ async def nl_to_sql(question, past_questions, db_id, metabase_url):
     if winner_fp:
         for fp, sql, metadata in candidates:
             if fp == winner_fp:
+                print("returning sql, metadata:", sql, metadata)
                 return sql, metadata
     # ---------- fallback ----------
     if candidates:
-        return candidates[0][1]
+        print("returning Candidate:", candidates[0][1])
+        return candidates[0][1], candidates[0][2]
     else:
         print("raw candidates:", completions)
         print("parsed candidates:", candidates)
@@ -524,7 +526,7 @@ WHERE
 AND
 "public"."Applications"."RegionalDistrict" IS NOT NULL
 AND
-"public"."Applications"."RegionalDistrict" != ''
+"public"."Applications"."RegionalDistrict" != '' 
 GROUP BY
 "public"."Applications"."RegionalDistrict"
 ORDER BY

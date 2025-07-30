@@ -160,7 +160,7 @@ def majority(items: list):
 
 async def fetch_chat_completion(input, model, session, index):
     print("tokens:", len(enc.encode(input)))
-    url = "https://api.openai.com/v1/chat/completions"
+    url = os.getenv("COMPLETION_ENDPOINT")
     headers = {
         "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
         "Content-Type": "application/json"

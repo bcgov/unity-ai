@@ -467,7 +467,7 @@ async def ask():
                 # Add more tenant mappings here as needed
             }
             
-            db_id = tenant_db_mapping.get(tenant_id, -1)
+            db_id = tenant_db_mapping.get(tenant_id, 3) # TODO change back to -1
             collection_id = 47  # Default collection ID for all tenants
 
         except:
@@ -548,7 +548,7 @@ ORDER BY
             }
             time.sleep(3)
 
-        elif question == "Now make it only for 2024 Q3":
+        elif question == "Only 2024 Q3":
             sql = '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
 SUM("public"."Applications"."ApprovedAmount") AS "sum"
 FROM

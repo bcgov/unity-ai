@@ -393,6 +393,35 @@ def create_question(sql: str, db_id: int, collection_id: int, name: str, metabas
 
     return card_id
 
+def get_all_card_ids(metabase_url) -> list:
+    """Get all card IDs from Metabase"""
+    try:
+        r = requests.get(f"{metabase_url}/api/card", headers=headers)
+        if r.status_code != 200:
+            raise Exception(f"HTTP {r.status_code}: {r.text}")
+        
+        cards = r.json()
+        return [card["id"] for card in cards]
+    except Exception as e:
+        print(f"Error getting cards from Metabase: {e}")
+        return []
+
+def update_card_visualization(card_id: int, mode: str, x_field: list, y_field: list, metabase_url: str) -> None:
+    """Update a Metabase card's visualization settings"""
+    r = requests.put(f"{metabase_url}/api/card/{card_id}",
+        headers=headers,
+        json={"display": mode,
+            "visualization_settings": {
+                "graph.dimensions": x_field,
+                "graph.metrics": y_field,
+                "pie.dimension": x_field,
+                "pie.metric": y_field[0] if len(y_field) > 0 else "",
+                "map.region": "1c5d50ee-4389-4593-37c1-fa8d4687ff4c"
+            }
+        })
+    if r.status_code != 200:
+        raise Exception(f"HTTP {r.status_code}: {r.text}")
+
 def generate_embed_url(card_id: int, metabase_url) -> str:
     payload = {
         "resource": {"question": card_id},
@@ -418,19 +447,7 @@ def change_display():
         if card_id == None or mode == None or x_field == None or y_field == None:
             return abort(400, "Missing inputs")
 
-        r2 = requests.put(f"{metabase_url}/api/card/{card_id}",
-            headers=headers,
-            json={"display": mode,
-                "visualization_settings": {
-                    "graph.dimensions": x_field,
-                    "graph.metrics": y_field,
-                    "pie.dimension": x_field,
-                    "pie.metric": y_field[0] if len(y_field) > 0 else "",
-                    "map.region": "1c5d50ee-4389-4593-37c1-fa8d4687ff4c"
-                }
-            })
-        if r2.status_code != 200:
-            raise Exception(f"HTTP {r2.status_code}: {r2.text}")
+        update_card_visualization(card_id, mode, x_field, y_field, metabase_url)
         embed_url = generate_embed_url(card_id, metabase_url)
         return {"url": embed_url, "card_id": card_id, "x_field": x_field, "y_field": y_field, "visualization_options": visualization_options}, 200
     return ""
@@ -449,6 +466,14 @@ def delete_question():
         return {"success": False}
     return {"success": True}
 
+def get_db_and_collection_id(tenant_id):
+    tenant_db_mapping = {
+        "Cyrus Org": 3,
+        "UnknownTenant": 3,  # Default for unknown tenants
+        # Add more tenant mappings here as needed
+    }
+    return tenant_db_mapping.get(tenant_id, 3), 47 # TODO change back to -1 default
+
 @app.route("/api/ask", methods=["GET", "POST"])
 async def ask():
     if request.method == "POST":
@@ -460,15 +485,7 @@ async def ask():
             metabase_url = data.get("metabase_url")
             tenant_id = data.get("tenant_id")
             
-            # Tenant to database ID mapping
-            tenant_db_mapping = {
-                "Cyrus Org": 3,
-                "UnknownTenant": 3,  # Default for unknown tenants
-                # Add more tenant mappings here as needed
-            }
-            
-            db_id = tenant_db_mapping.get(tenant_id, 3) # TODO change back to -1
-            collection_id = 47  # Default collection ID for all tenants
+            db_id, collection_id = get_db_and_collection_id(tenant_id)
 
         except:
             return abort(400, "Data is required")
@@ -627,7 +644,7 @@ def get_chats():
 
 @app.route("/api/chats/<chat_id>", methods=["POST"])
 def get_chat(chat_id):
-    """Get a specific chat"""
+    """Get a specific chat and verify/recreate Metabase cards if needed"""
     data = request.get_json()
     try:
         user_id = data.get("user_id")
@@ -637,8 +654,9 @@ def get_chat(chat_id):
         
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Get chat with metabase_url
                 cur.execute("""
-                    SELECT conversation 
+                    SELECT conversation, metabase_url, tenant_id
                     FROM chats 
                     WHERE chat_id = %s AND user_id = %s
                 """, (chat_id, user_id))
@@ -647,7 +665,61 @@ def get_chat(chat_id):
                 if not row:
                     return abort(404, "Chat not found")
                 
-                return {"conversation": row[0]}, 200
+                conversation = row[0]
+                metabase_url = row[1]
+                tenant_id = row[2]
+                
+                # Get all existing card IDs from Metabase
+                existing_card_ids = get_all_card_ids(metabase_url)
+                
+                # Check each turn in the conversation
+                updated_conversation = []
+                for turn in conversation:
+                    if 'embed' in turn and turn['embed'] and 'card_id' in turn['embed']:
+                        card_id = turn['embed']['card_id']
+                        
+                        # If card doesn't exist in Metabase, recreate it
+                        if card_id not in existing_card_ids:
+                            # Extract necessary data from the turn
+                            sql = turn['embed'].get('SQL', '')
+                            title = turn['embed'].get('title', 'Untitled')
+                            
+                            if sql:
+                                
+                                db_id, collection_id = get_db_and_collection_id(tenant_id)
+                                
+                                # Create new question in Metabase
+                                new_card_id = create_question(sql, db_id, collection_id, title, metabase_url)
+                                
+                                # Apply visualization settings if available
+                                current_visualization = turn['embed'].get('current_visualization')
+                                x_field = turn['embed'].get('x_field', [])
+                                y_field = turn['embed'].get('y_field', [])
+                                
+                                if current_visualization and x_field and y_field:
+                                    try:
+                                        update_card_visualization(new_card_id, current_visualization, x_field, y_field, metabase_url)
+                                    except Exception as e:
+                                        print(f"Error updating visualization settings: {e}")
+                                
+                                new_embed_url = generate_embed_url(new_card_id, metabase_url)
+                                
+                                # Update the turn with new card_id and URL
+                                turn['embed']['card_id'] = new_card_id
+                                turn['embed']['url'] = new_embed_url
+                    
+                    updated_conversation.append(turn)
+                
+                # Update the conversation in the database if any cards were recreated
+                if conversation != updated_conversation:
+                    cur.execute("""
+                        UPDATE chats 
+                        SET conversation = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE chat_id = %s AND user_id = %s
+                    """, (json.dumps(updated_conversation), chat_id, user_id))
+                    conn.commit()
+                
+                return {"conversation": updated_conversation}, 200
                 
     except Exception as e:
         print(f"Error getting chat: {e}")

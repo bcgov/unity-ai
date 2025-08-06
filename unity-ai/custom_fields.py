@@ -85,6 +85,34 @@ _(none)_
             break
     return parsed
 
+def get_views_schemas():
+    schema = requests.get(
+        f"{os.getenv('MB_EMBED_URL')}/api/database/{os.getenv('MB_EMBED_ID')}/metadata",
+        headers=headers
+    ).json()
+
+    junk_cols = {
+        "CreatorId", "LastModificationTime", "LastModifierId",
+        "ExtraProperties", "ConcurrencyStamp", "CreationTime",
+    }
+
+    docs = []
+
+    for tbl in schema["tables"]:
+        if tbl["schema"] != "Reporting":
+            continue
+
+        cols = [
+            f"{c['name']} ({c['base_type']})"
+            for c in tbl["fields"]
+            if c["name"] not in junk_cols
+        ]
+
+        page = f"# {tbl['name']}({', '.join(cols)})"
+        docs.append(page)
+        print(page)
+
+    return docs
 
 print(get_parsed_worksheets())
 

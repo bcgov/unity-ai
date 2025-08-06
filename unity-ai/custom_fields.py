@@ -23,12 +23,12 @@ def get_sql(sql, db_id, metabase_url):
 
 def get_worksheets():
     sql = f'SELECT "Worksheets"."Name", "Worksheets"."Id" FROM "Flex"."Worksheets"'
-    data = get_sql(sql, 3, os.getenv("MB_URL"))
+    data = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
     return [{"name": r[0], "id": r[1]} for r in data["rows"]]
 
 def get_worksheet_instances(worksheetId):
     sql = f'SELECT "WorksheetInstances"."CurrentValue", "WorksheetInstances"."WorksheetCorrelationId" FROM "Flex"."WorksheetInstances" WHERE "WorksheetInstances"."WorksheetId" = \'{worksheetId}\''
-    data = get_sql(sql, 3, os.getenv("MB_URL"))
+    data = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
     return data
 
 def get_custom_labels():
@@ -85,6 +85,15 @@ _(none)_
             break
     return parsed
 
+
+def get_column_example(table, column):
+    sql = f"SELECT \"{column}\" FROM \"Reporting\".\"{table}\" WHERE \"{column}\" IS NOT null and \"{column}\" <> ''"
+    instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+    try:
+        return instance["rows"][0][0]
+    except:
+        return None
+
 def get_views_schemas():
     schema = requests.get(
         f"{os.getenv('MB_EMBED_URL')}/api/database/{os.getenv('MB_EMBED_ID')}/metadata",
@@ -99,7 +108,7 @@ def get_views_schemas():
     docs = []
 
     for tbl in schema["tables"]:
-        if tbl["schema"] != "Reporting":
+        if tbl["schema"] != "Reporting" or "Worksheet" not in tbl['name']:
             continue
 
         cols = [
@@ -108,13 +117,25 @@ def get_views_schemas():
             if c["name"] not in junk_cols
         ]
 
-        page = f"# {tbl['name']}({', '.join(cols)})"
-        docs.append(page)
-        print(page)
+        # Find out if there are non-blank rows 
+        sql = f"SELECT * FROM \"Reporting\".\"{tbl['name']}\" "
+        instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+        rows = [r for r in instance["rows"] if set(r[3:]) != set([''])]
+        if len(rows) > 0:
+
+            # page = f"# Reporting: {tbl['name']}({', '.join(cols)})"
+            page = f"# Reporting: {tbl['name']}"
+            for c in cols:
+                example = get_column_example(tbl['name'], c.split(' ')[0])
+                if example is not None:
+                    page += f"\n - {c}: '{example[:50]}{'...' if len(example) > 50 else ''}'"
+            docs.append(page)
+            print(page)
 
     return docs
 
-print(get_parsed_worksheets())
+get_views_schemas()
+# get_column_example("Worksheet-cpworksheet-v1", "field2")
 
 '''
 **Extraction pattern (PostgreSQL)**

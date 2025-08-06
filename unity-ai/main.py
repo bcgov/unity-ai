@@ -109,9 +109,6 @@ def init_chat_table():
             """)
             conn.commit()
 
-# Initialize chat table on startup
-init_chat_table()
-
 def get_sql(sql, db_id, metabase_url):
     ds_req = {
         "database": db_id,
@@ -184,7 +181,15 @@ async def fetch_chat_completion(input, model, session, index):
         # print(data["choices"][0]["message"]["content"])
         return data["choices"][0]["message"]["content"]
 
-def get_table_schemas():
+def get_column_example(folder, table, column):
+    sql = f"SELECT \"{column}\" FROM \"{folder}\".\"{table}\" WHERE \"{column}\" IS NOT null and \"{column}\" <> ''"
+    instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+    try:
+        return instance["rows"][0][0]
+    except:
+        return None
+
+def get_table_schemas(is_custom):
     schema = requests.get(
         f"{os.getenv('MB_EMBED_URL')}/api/database/{os.getenv('MB_EMBED_ID')}/metadata",
         headers=headers
@@ -199,7 +204,7 @@ def get_table_schemas():
     docs = []
 
     for tbl in schema["tables"]:
-        if tbl["schema"] != "public" or tbl["name"] in junk_tables:
+        if tbl["schema"] != "public" or tbl["name"] in junk_tables or (is_custom and "Worksheet" not in tbl['name']):
             continue
 
         cols = [
@@ -208,9 +213,24 @@ def get_table_schemas():
             if c["name"] not in junk_cols
         ]
 
-        page = f"# {tbl['name']}({', '.join(cols)})"
-        docs.append(page)
-        print(page)
+        # page = f"# {tbl['name']}({', '.join(cols)})"
+        # docs.append(page)
+        # print(page)
+
+        # Find out if there are non-blank rows and if so append an example per column
+        sql = f"SELECT * FROM \"{'Reporting' if is_custom else 'Public'}\".\"{tbl['name']}\" "
+        instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+        rows = [r for r in instance["rows"] if set(r[3:]) != set([''])]
+        if len(rows) > 0:
+
+            # page = f"# Reporting: {tbl['name']}({', '.join(cols)})"
+            page = f"# {'Reporting' if is_custom else 'Public'}: {tbl['name']}"
+            for c in cols:
+                example = get_column_example(f"{'Reporting' if is_custom else 'Public'}", tbl['name'], c.split(' ')[0])
+                if example is not None:
+                    page += f"\n - {c}: '{example[:50]}{'...' if len(example) > 50 else ''}'"
+            docs.append(page)
+            print(page)
 
     return docs
 
@@ -242,10 +262,10 @@ def embed_schema():
     
     # Then add new embeddings
     print("Adding new embeddings...")
-    vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas()])
+    vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas(False)])
 
     if EMBED_WORKSHEETS:
-        vector_store.add_documents([Document(page_content=p.strip()) for p in get_parsed_worksheets()])
+        vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas(True)])
 
 def sql_is_valid(sql: str, db_id: int, metabase_url) -> tuple[bool, str | None]:
     """
@@ -812,4 +832,5 @@ if __name__ == "__main__":
         print("Finished embedding process.")
     else:
         print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")
+        init_chat_table()
         app.run(host="0.0.0.0", port=5000, debug=app.config['DEBUG'], use_reloader=app.config['DEBUG'])

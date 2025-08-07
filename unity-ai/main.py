@@ -41,8 +41,7 @@ else:
 
 headers = {"x-api-key": os.getenv("METABASE_KEY")}
 
-EMBED_WORKSHEETS = False
-EMBED_SAMPLES = True
+EMBED_WORKSHEETS = True
 K = 7
 MODEL="gpt-4o-mini"
 
@@ -181,8 +180,10 @@ async def fetch_chat_completion(input, model, session, index):
         # print(data["choices"][0]["message"]["content"])
         return data["choices"][0]["message"]["content"]
 
-def get_column_example(folder, table, column):
-    sql = f"SELECT \"{column}\" FROM \"{folder}\".\"{table}\" WHERE \"{column}\" IS NOT null and \"{column}\" <> ''"
+def get_column_example(is_text, folder, table, column):
+    sql = f"SELECT \"{column}\" FROM \"{folder}\".\"{table}\" WHERE \"{column}\" IS NOT null"
+    if is_text:
+        sql += f" and \"{column}\" <> ''"
     instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
     try:
         return instance["rows"][0][0]
@@ -198,13 +199,14 @@ def get_table_schemas(is_custom):
     junk_cols = {
         "CreatorId", "LastModificationTime", "LastModifierId",
         "ExtraProperties", "ConcurrencyStamp", "CreationTime",
+        "CorrelationProvider"
     }
     junk_tables = {"ApplicationFormSubmissions", "__EFMigrationsHistory"}
 
     docs = []
 
     for tbl in schema["tables"]:
-        if tbl["schema"] != "public" or tbl["name"] in junk_tables or (is_custom and "Worksheet" not in tbl['name']):
+        if tbl["name"] in junk_tables or (not is_custom and tbl["schema"] != "public") or (is_custom and "Worksheet" not in tbl['name']):
             continue
 
         cols = [
@@ -218,15 +220,14 @@ def get_table_schemas(is_custom):
         # print(page)
 
         # Find out if there are non-blank rows and if so append an example per column
-        sql = f"SELECT * FROM \"{'Reporting' if is_custom else 'Public'}\".\"{tbl['name']}\" "
+        sql = f"SELECT * FROM \"{'Reporting' if is_custom else 'public'}\".\"{tbl['name']}\" "
         instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
         rows = [r for r in instance["rows"] if set(r[3:]) != set([''])]
         if len(rows) > 0:
-
-            # page = f"# Reporting: {tbl['name']}({', '.join(cols)})"
-            page = f"# {'Reporting' if is_custom else 'Public'}: {tbl['name']}"
+            page = f"# \"{'Reporting' if is_custom else 'public'}\".\"{tbl['name']}\""
+            if is_custom: page += f"\n - CorrelationId (type/UUID): {rows[0][1]}"
             for c in cols:
-                example = get_column_example(f"{'Reporting' if is_custom else 'Public'}", tbl['name'], c.split(' ')[0])
+                example = str(get_column_example('Text' in c, f"{'Reporting' if is_custom else 'public'}", tbl['name'], c.split(' ')[0]))
                 if example is not None:
                     page += f"\n - {c}: '{example[:50]}{'...' if len(example) > 50 else ''}'"
             docs.append(page)

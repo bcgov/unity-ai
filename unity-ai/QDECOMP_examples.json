@@ -81,5 +81,18 @@
     "x_axis": ["City"],
     "y_axis": ["total_requested"],
     "visualization_options": ["bar", "pie"]
+  },
+  {
+    "Schema": [
+      "\"Reporting\".\"Worksheet-eventinformation-v7\"(CorrelationId, EventTypeartsCultureFest, EventTypeliveMusicFest, EventTypesportEventsFest, EventTypeother)",
+      "\"public\".\"Applications\"(Id)"
+    ],
+    "Question": "How many applications correspond to each event type?",
+    "Reasoning": "Join the worksheet to Applications on CorrelationId = Applications.Id. Each event type is stored as a 'True'/'False' flag in separate columns; count rows where each flag is 'True' and UNION ALL the results to produce a tidy (event_type, event_count) table.",
+    "SQL": "SELECT 'artsCultureFest' AS event_type, COUNT(*) AS event_count\nFROM \"Reporting\".\"Worksheet-eventinformation-v7\" w\nJOIN \"public\".\"Applications\" a ON a.\"Id\" = w.\"CorrelationId\"\nWHERE w.\"EventTypeartsCultureFest\" = 'True'\nUNION ALL\nSELECT 'liveMusicFest' AS event_type, COUNT(*) AS event_count\nFROM \"Reporting\".\"Worksheet-eventinformation-v7\" w\nJOIN \"public\".\"Applications\" a ON a.\"Id\" = w.\"CorrelationId\"\nWHERE w.\"EventTypeliveMusicFest\" = 'True'\nUNION ALL\nSELECT 'sportEventsFest' AS event_type, COUNT(*) AS event_count\nFROM \"Reporting\".\"Worksheet-eventinformation-v7\" w\nJOIN \"public\".\"Applications\" a ON a.\"Id\" = w.\"CorrelationId\"\nWHERE w.\"EventTypesportEventsFest\" = 'True'\nUNION ALL\nSELECT 'other' AS event_type, COUNT(*) AS event_count\nFROM \"Reporting\".\"Worksheet-eventinformation-v7\" w\nJOIN \"public\".\"Applications\" a ON a.\"Id\" = w.\"CorrelationId\"\nWHERE w.\"EventTypeother\" = 'True'\nORDER BY event_count DESC;",
+    "title": "Applications by Event Type",
+    "x_axis": ["event_type"],
+    "y_axis": ["event_count"],
+    "visualization_options": ["bar", "pie"]
   }
 ]

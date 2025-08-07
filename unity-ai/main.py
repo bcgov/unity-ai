@@ -180,19 +180,19 @@ async def fetch_chat_completion(input, model, session, index):
         # print(data["choices"][0]["message"]["content"])
         return data["choices"][0]["message"]["content"]
 
-def get_column_example(is_text, folder, table, column):
+def get_column_example(is_text, folder, table, column, db_id=3):
     sql = f"SELECT \"{column}\" FROM \"{folder}\".\"{table}\" WHERE \"{column}\" IS NOT null"
     if is_text:
         sql += f" and \"{column}\" <> ''"
-    instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+    instance = get_sql(sql, db_id, os.getenv("MB_EMBED_URL"))
     try:
         return instance["rows"][0][0]
     except:
         return None
 
-def get_table_schemas(is_custom):
+def get_table_schemas(is_custom, db_id=3):
     schema = requests.get(
-        f"{os.getenv('MB_EMBED_URL')}/api/database/{os.getenv('MB_EMBED_ID')}/metadata",
+        f"{os.getenv('MB_EMBED_URL')}/api/database/{db_id}/metadata",
         headers=headers
     ).json()
 
@@ -221,13 +221,13 @@ def get_table_schemas(is_custom):
 
         # Find out if there are non-blank rows and if so append an example per column
         sql = f"SELECT * FROM \"{'Reporting' if is_custom else 'public'}\".\"{tbl['name']}\" "
-        instance = get_sql(sql, 3, os.getenv("MB_EMBED_URL"))
+        instance = get_sql(sql, db_id, os.getenv("MB_EMBED_URL"))
         rows = [r for r in instance["rows"] if set(r[3:]) != set([''])]
         if len(rows) > 0:
             page = f"# \"{'Reporting' if is_custom else 'public'}\".\"{tbl['name']}\""
             if is_custom: page += f"\n - CorrelationId (type/UUID): {rows[0][1]}"
             for c in cols:
-                example = str(get_column_example('Text' in c, f"{'Reporting' if is_custom else 'public'}", tbl['name'], c.split(' ')[0]))
+                example = str(get_column_example('Text' in c, f"{'Reporting' if is_custom else 'public'}", tbl['name'], c.split(' ')[0], db_id))
                 if example is not None:
                     page += f"\n - {c}: '{example[:50]}{'...' if len(example) > 50 else ''}'"
             docs.append(page)
@@ -235,21 +235,36 @@ def get_table_schemas(is_custom):
 
     return docs
 
-def purge_embeddings():
-    """Delete all existing embeddings from the vector store"""
-    print("Purging existing embeddings...")
+def purge_embeddings(db_id=None):
+    """Delete existing embeddings from the vector store for a specific db_id or all"""
+    if db_id:
+        print(f"Purging existing embeddings for db_id: {db_id}...")
+    else:
+        print("Purging all existing embeddings...")
+    
     try:
-        # Use the same connection method as get_db_connection()
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Delete all records from the langchain_pg_embedding table for our collection
-                cur.execute("""
-                    DELETE FROM langchain_pg_embedding 
-                    WHERE collection_id IN (
-                        SELECT uuid FROM langchain_pg_collection 
-                        WHERE name = %s
-                    )
-                """, ("embedded_schema",))
+                if db_id:
+                    # Delete only embeddings for specific db_id
+                    cur.execute("""
+                        DELETE FROM langchain_pg_embedding 
+                        WHERE collection_id IN (
+                            SELECT uuid FROM langchain_pg_collection 
+                            WHERE name = %s
+                        )
+                        AND cmetadata->>'db_id' = %s
+                    """, ("embedded_schema", str(db_id)))
+                else:
+                    # Delete all embeddings
+                    cur.execute("""
+                        DELETE FROM langchain_pg_embedding 
+                        WHERE collection_id IN (
+                            SELECT uuid FROM langchain_pg_collection 
+                            WHERE name = %s
+                        )
+                    """, ("embedded_schema",))
+                
                 deleted_count = cur.rowcount
                 conn.commit()
                 print(f"Purged {deleted_count} existing embeddings")
@@ -257,16 +272,34 @@ def purge_embeddings():
         print(f"Error purging embeddings: {e}")
         raise
 
-def embed_schema():
-    # First purge existing embeddings
-    purge_embeddings()
+def embed_schema(db_id=3):
+    # First purge existing embeddings for this db_id
+    purge_embeddings(db_id)
     
-    # Then add new embeddings
-    print("Adding new embeddings...")
-    vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas(False)])
+    # Then add new embeddings with db_id metadata
+    print(f"Adding new embeddings for db_id: {db_id}...")
+    
+    # Get public schemas and add with metadata
+    public_schemas = get_table_schemas(False, db_id)
+    public_docs = [
+        Document(
+            page_content=schema.strip(),
+            metadata={"db_id": db_id, "schema_type": "public"}
+        ) 
+        for schema in public_schemas
+    ]
+    vector_store.add_documents(public_docs)
 
     if EMBED_WORKSHEETS:
-        vector_store.add_documents([Document(page_content=p.strip()) for p in get_table_schemas(True)])
+        custom_schemas = get_table_schemas(True, db_id)
+        custom_docs = [
+            Document(
+                page_content=schema.strip(),
+                metadata={"db_id": db_id, "schema_type": "custom"}
+            )
+            for schema in custom_schemas
+        ]
+        vector_store.add_documents(custom_docs)
 
 def sql_is_valid(sql: str, db_id: int, metabase_url) -> tuple[bool, str | None]:
     """
@@ -325,7 +358,21 @@ def extract_metadata(block: str) -> Optional[Dict[str, Any]]:
 
 async def nl_to_sql(question, past_questions, db_id, metabase_url):  
 
-    retrieved = vector_store.similarity_search(question, k=5)
+    # Get 4 examples from public schema and 4 from reporting (custom) schema
+    public_retrieved = vector_store.similarity_search(
+        question, 
+        k=4,
+        filter={"db_id": db_id, "schema_type": "public"}
+    )
+    
+    custom_retrieved = vector_store.similarity_search(
+        question,
+        k=4,
+        filter={"db_id": db_id, "schema_type": "custom"}
+    )
+    
+    # Combine both sets of retrieved schemas
+    retrieved = public_retrieved + custom_retrieved
     retrieved_tables = "\n".join(doc.page_content for doc in retrieved)
 
     with open("QDECOMP_examples.json", "r") as file:
@@ -489,11 +536,10 @@ def delete_question():
 
 def get_db_and_collection_id(tenant_id):
     tenant_db_mapping = {
-        "Cyrus Org": 3,
-        "UnknownTenant": 3,  # Default for unknown tenants
+        "Cyrus Org": [3, 47]
         # Add more tenant mappings here as needed
     }
-    return tenant_db_mapping.get(tenant_id, 3), 47 # TODO change back to -1 default
+    return tenant_db_mapping.get(tenant_id, [3, 47]) # TODO change back to -1 default
 
 @app.route("/api/ask", methods=["GET", "POST"])
 async def ask():
@@ -828,8 +874,10 @@ def health_check():
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "g":
-        print("Beginning schema embedding process...")
-        embed_schema()
+        # Optional: pass db_id as second argument
+        db_id = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+        print(f"Beginning schema embedding process for db_id: {db_id}...")
+        embed_schema(db_id)
         print("Finished embedding process.")
     else:
         print(f"Starting Flask app in {FLASK_ENV} mode with debug={app.config['DEBUG']}")

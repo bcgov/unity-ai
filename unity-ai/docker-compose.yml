@@ -30,9 +30,7 @@ services:
       - DB_PASSWORD=unity_pass
     env_file:
       - ../.env
-    volumes:
-      - ./QDECOMP_examples.json:/app/QDECOMP_examples.json
-      - ./sql_examples.json:/app/sql_examples.json
+    # No volume mounts needed - backend code is copied into container
     networks:
       - unity-ai-network
     depends_on:
@@ -59,7 +57,7 @@ services:
 
   frontend:
     build: 
-      context: ./recap
+      context: ./frontend
       args:
         - JWT_SECRET=${JWT_SECRET}
     env_file:

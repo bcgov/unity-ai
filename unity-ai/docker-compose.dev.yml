@@ -1,8 +1,7 @@
-version: '3.8'
 services:
   frontend:
     build:
-      context: ./recap
+      context: ./frontend
       dockerfile: Dockerfile.dev
       args:
         - JWT_SECRET=${JWT_SECRET}
@@ -11,12 +10,15 @@ services:
     env_file:
       - ../.env
     volumes:
-      - ./recap/src:/app/src
-      - ./recap/angular.json:/app/angular.json
-      - ./recap/package.json:/app/package.json
-      - ./recap/tsconfig.json:/app/tsconfig.json
-      # Exclude environment files to prevent overwriting the JWT_SECRET replacement
-      - /app/src/environments
+      - ./frontend/src/app:/app/src/app
+      - ./frontend/src/assets:/app/src/assets
+      - ./frontend/src/index.html:/app/src/index.html
+      - ./frontend/src/main.ts:/app/src/main.ts
+      - ./frontend/src/styles.css:/app/src/styles.css
+      - ./frontend/angular.json:/app/angular.json
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      # Environment files are NOT mounted - keeping container's JWT_SECRET replaced versions
     environment:
       - NODE_ENV=development
     networks:
@@ -38,16 +40,31 @@ services:
     env_file:
       - ../.env
     volumes:
-      - .:/app
-      - ./QDECOMP_examples.json:/app/QDECOMP_examples.json
-      - ./sql_examples.json:/app/sql_examples.json
+      - ./backend:/app/backend
     networks:
       - unity-ai-network
     depends_on:
       postgres:
         condition: service_healthy
-    command: python -m flask --app main run --host=0.0.0.0 --port=5000 --reload
+    command: python app.py
 
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: unity_ai
+      POSTGRES_USER: unity_user
+      POSTGRES_PASSWORD: unity_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - unity-ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unity_user -d unity_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -61,3 +78,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+networks:
+  unity-ai-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

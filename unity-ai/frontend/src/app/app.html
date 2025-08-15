@@ -40,9 +40,6 @@
         <div *ngFor="let turn of conversation" class="turn">
           <div class="bubble bot">
             <div *ngIf="turn.iframeLoaded == false" class="sql-loader-container">
-              <div class="sql-animation-container" #sqlAnimationContainer>
-                <sql-loader [parentScrollFn]="scrollSqlToBottom.bind(this)"></sql-loader>
-              </div>
               <div class="loading-animation-overlay">
                 <div class="loading-dots">
                   <div class="loading-dot"></div>

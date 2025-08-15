@@ -14,6 +14,7 @@ from collections import Counter
 from config import config
 from embeddings import embedding_manager
 from metabase import metabase_client
+import time
 
 
 class SQLGenerator:
@@ -322,10 +323,83 @@ ORDER BY
                     "y_axis": ["sum"],
                     "visualization_options": ["bar", "pie", "map"]
                 }
+            ),
+            "Only 2024 Q3": (
+                '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
+SUM("public"."Applications"."ApprovedAmount") AS "sum"
+FROM
+"public"."Applications"
+
+LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+WHERE
+"ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+AND
+"public"."Applications"."RegionalDistrict" IS NOT NULL
+AND
+"public"."Applications"."RegionalDistrict" != ''
+AND "public"."Applications"."SubmissionDate" >= '2024-07-01'
+AND "public"."Applications"."SubmissionDate" <= '2024-09-30'    
+GROUP BY
+"public"."Applications"."RegionalDistrict"
+ORDER BY
+"public"."Applications"."RegionalDistrict" ASC''',
+                {
+                    "title": "Approved Amount per Regional District - 2024 Q3",
+                    "x_axis": ["RegionalDistrict"],
+                    "y_axis": ["sum"],
+                    "visualization_options": ["bar", "pie", "map"]
+                }
+            ),
+            "Show results from last quarter": (
+                '''SELECT a."RegionalDistrict", SUM(a."ApprovedAmount") AS total_approved
+FROM "public"."Applications" AS a
+JOIN "public"."Applicants" AS ap ON a."ApplicantId" = ap."Id"
+LEFT JOIN "public"."ApplicationStatuses" AS s ON a."ApplicationStatusId" = s."Id"
+WHERE s."ExternalStatus" = 'Approved'
+AND ap."IndigenousOrgInd" = 'Yes'
+AND a."SubmissionDate" >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '3 months'
+AND a."SubmissionDate" < DATE_TRUNC('quarter', CURRENT_DATE)
+GROUP BY a."RegionalDistrict"
+ORDER BY a."RegionalDistrict" ASC;''',
+                {
+                    "title": "Total Approved Amount by Indigenous Organizations from Last Quarter",
+                    "x_axis": ["RegionalDistrict"],
+                    "y_axis": ["sum"],
+                    "visualization_options": ["bar", "pie", "map"]
+                }
+            ),
+            "For indigenous organizations only": (
+                '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
+SUM("public"."Applications"."ApprovedAmount") AS "sum"
+FROM
+"public"."Applications"
+JOIN 
+    "public"."Applicants" AS ap ON "public"."Applications"."ApplicantId" = ap."Id"
+
+LEFT JOIN "public"."ApplicationStatuses" AS "ApplicationStatuses - ApplicationStatusId" ON "public"."Applications"."ApplicationStatusId" = "ApplicationStatuses - ApplicationStatusId"."Id"
+WHERE
+"ApplicationStatuses - ApplicationStatusId"."ExternalStatus" = 'Approved'
+AND
+"public"."Applications"."RegionalDistrict" IS NOT NULL
+AND
+"public"."Applications"."RegionalDistrict" != ''
+AND
+ap."IndigenousOrgInd" = 'Yes'   
+GROUP BY
+"public"."Applications"."RegionalDistrict"
+ORDER BY
+"public"."Applications"."RegionalDistrict" ASC''',
+                {
+                    "title": "Approved Amount per Regional District - Indigenous Org's",
+                    "x_axis": ["RegionalDistrict"],
+                    "y_axis": ["sum"],
+                    "visualization_options": ["bar", "pie", "map"]
+                }
             )
         }
         
         if question in examples:
+            time.sleep(2)
             return examples[question]
         return None
 

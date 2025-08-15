@@ -65,7 +65,7 @@ cp ../.env.example ../.env
 3. **Install dependencies**
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 4. **Initialize database**

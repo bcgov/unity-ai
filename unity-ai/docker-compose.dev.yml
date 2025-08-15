@@ -1,7 +1,7 @@
 services:
   frontend:
     build:
-      context: ./frontend
+      context: ./recap
       dockerfile: Dockerfile.dev
       args:
         - JWT_SECRET=${JWT_SECRET}
@@ -10,15 +10,12 @@ services:
     env_file:
       - ../.env
     volumes:
-      - ./frontend/src/app:/app/src/app
-      - ./frontend/src/assets:/app/src/assets
-      - ./frontend/src/index.html:/app/src/index.html
-      - ./frontend/src/main.ts:/app/src/main.ts
-      - ./frontend/src/styles.css:/app/src/styles.css
-      - ./frontend/angular.json:/app/angular.json
-      - ./frontend/package.json:/app/package.json
-      - ./frontend/tsconfig.json:/app/tsconfig.json
-      # Environment files are NOT mounted - keeping container's JWT_SECRET replaced versions
+      - ./recap/src:/app/src
+      - ./recap/angular.json:/app/angular.json
+      - ./recap/package.json:/app/package.json
+      - ./recap/tsconfig.json:/app/tsconfig.json
+      # Exclude environment files to prevent overwriting the JWT_SECRET replacement
+      - /app/src/environments
     environment:
       - NODE_ENV=development
     networks:
@@ -40,13 +37,16 @@ services:
     env_file:
       - ../.env
     volumes:
+      - .:/app
       - ./backend:/app/backend
+      - ./QDECOMP_examples.json:/app/backend/QDECOMP_examples.json
+      - ./sql_examples.json:/app/backend/sql_examples.json
     networks:
       - unity-ai-network
     depends_on:
       postgres:
         condition: service_healthy
-    command: python app.py
+    command: python backend/app.py
 
   postgres:
     image: pgvector/pgvector:pg16

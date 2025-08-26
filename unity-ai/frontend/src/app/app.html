@@ -61,7 +61,7 @@
             </div>
             <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
               
-              <app-sql-explanation [explanation]="turn.embed.sql_explanation"></app-sql-explanation>
+              <app-sql-explanation *ngIf="turn.sql_explanation_visible" [explanation]="turn.embed.sql_explanation"></app-sql-explanation>
 
               <iframe
                 [src]="turn.safeUrl"
@@ -118,6 +118,14 @@
               <button class="action-button" (click)="toggleSqlPanel(conversation[currentTurnIndex])" title="Show/Hide SQL">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              
+              <button class="action-button" (click)="generateSqlExplanation(conversation[currentTurnIndex])" title="Generate SQL Explanation">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M9 9C9 7.34315 10.3431 6 12 6C13.6569 6 15 7.34315 15 9C15 10.6569 13.6569 12 12 12V14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="currentColor"/>
                 </svg>
               </button>
               

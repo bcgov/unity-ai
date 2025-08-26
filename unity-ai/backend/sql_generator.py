@@ -414,7 +414,7 @@ ORDER BY
             A short, user-friendly explanation of what the SQL does
         """
         try:
-            prompt = f"""Please provide an extremely succinct explanation of this SQL you created. Start with "I've..." and include details such as mentioning which columns you got specific details from:
+            prompt = f"""Please provide an extremely succinct explanation of this report you created. Start with "I've...":
 
 {sql}"""
             
@@ -424,13 +424,12 @@ ORDER BY
             }
             
             json_data = {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant that explains SQL queries in simple terms."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.3,
-                "max_tokens": 100
+                "temperature": 0.3
             }
             
             async with aiohttp.ClientSession() as session:

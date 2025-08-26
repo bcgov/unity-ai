@@ -6,21 +6,61 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="sql-explanation" *ngIf="displayedText || isWaiting">
-      <span>{{ displayedText }}</span>
-      <span class="cursor" *ngIf="showCursor">█</span>
+    <div class="sql-explanation-bubble" *ngIf="displayedText || isWaiting">
+      <div class="bubble-content">
+        <span>{{ displayedText }}</span>
+        <span class="cursor" *ngIf="showCursor">█</span>
+      </div>
+      <div class="bubble-tail"></div>
     </div>
   `,
   styles: [`
-    .sql-explanation {
-      font-size: 0.8em;
-      margin: 8px;
+    .sql-explanation-bubble {
+      position: relative;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 0;
+      margin: 12px 8px 8px 8px;
+      font-size: 0.85em;
+      color: #075985;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .bubble-content {
+      padding: 10px 14px;
+      line-height: 1.4;
+    }
+
+    .bubble-tail {
+      position: absolute;
+      top: -6px;
+      left: 30px;
+      width: 12px;
+      height: 12px;
+      background: #f0f9ff;
+      border-left: 1px solid #bae6fd;
+      border-top: 1px solid #bae6fd;
+      transform: rotate(45deg);
     }
     
     .cursor {
       animation: blink 1s infinite;
       font-weight: normal;
       opacity: 0.8;
+      color: #075985;
     }
     
     @keyframes blink {
@@ -38,8 +78,15 @@ export class SqlExplanationComponent implements OnChanges, OnDestroy {
   private delayTimeout: any;
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['explanation'] && this.explanation) {
-      this.startDelayedStream();
+    if (changes['explanation']) {
+      if (this.explanation) {
+        this.startDelayedStream();
+      } else {
+        // Show just the cursor while waiting for explanation
+        this.displayedText = '';
+        this.showCursor = true;
+        this.isWaiting = true;
+      }
     }
   }
 
@@ -51,10 +98,8 @@ export class SqlExplanationComponent implements OnChanges, OnDestroy {
     this.showCursor = true;
     this.isWaiting = true;
     
-    // Wait 2 seconds before starting to stream
-    this.delayTimeout = setTimeout(() => {
-      this.streamText();
-    }, 4000);
+    // Start streaming immediately - no delay
+    this.streamText();
   }
 
   private streamText(): void {
@@ -71,7 +116,7 @@ export class SqlExplanationComponent implements OnChanges, OnDestroy {
         this.showCursor = false;
         clearInterval(this.streamingInterval);
       }
-    }, 20); // 15ms delay between each letter
+    }, 10); // 15ms delay between each letter
   }
 
   private clearTimers(): void {

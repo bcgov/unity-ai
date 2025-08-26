@@ -117,6 +117,32 @@ export class App implements OnInit, OnDestroy {
     turn.sqlPanelOpen = !turn.sqlPanelOpen;
   }
 
+  async generateSqlExplanation(turn: Turn): Promise<void> {
+    if (!turn.embed?.SQL) {
+      // If no SQL exists, do nothing
+      return;
+    }
+
+    // Toggle visibility
+    turn.sql_explanation_visible = !turn.sql_explanation_visible;
+
+    // If turning on and no explanation exists yet, generate it
+    if (turn.sql_explanation_visible && !turn.embed.sql_explanation) {
+      try {
+        const explanationResponse = await firstValueFrom(
+          this.apiService.explainSql<{ explanation: string }>(turn.embed.SQL)
+        );
+        turn.embed.sql_explanation = explanationResponse.explanation;
+      } catch (error) {
+        // If explanation fails, use a default message
+        turn.embed.sql_explanation = "This query retrieves and analyzes your data.";
+      }
+    }
+
+    // Save the chat to persist the visibility state
+    await this.saveChat();
+  }
+
   private observerMap = new Map<any, IntersectionObserver>();
 
   // In your component class, add a method:
@@ -282,7 +308,7 @@ export class App implements OnInit, OnDestroy {
     // Always reset to table visualization for new questions
     this.selectedVisualization = 'table';
     
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: ""} as Turn;
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: "", sql_explanation_visible: false} as Turn;
     this.conversation.push(turn);
     
     // Set the new turn as the current turn for navigation
@@ -299,19 +325,6 @@ export class App implements OnInit, OnDestroy {
 
       if (turn.embed.url == "fail") {
         throw new Error;
-      }
-      
-      // Fetch SQL explanation after SQL is generated
-      if (turn.embed.SQL) {
-        try {
-          const explanationResponse = await firstValueFrom(
-            this.apiService.explainSql<{ explanation: string }>(turn.embed.SQL)
-          );
-          turn.embed.sql_explanation = explanationResponse.explanation;
-        } catch (error) {
-          // If explanation fails, use a default message
-          turn.embed.sql_explanation = "This query retrieves and analyzes your data.";
-        }
       }
       
       // New questions always start as table view
@@ -371,7 +384,8 @@ export class App implements OnInit, OnDestroy {
       this.conversation = chatData.conversation.map(turn => ({
         ...turn,
         safeUrl: turn.embed?.url ? this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url) : 'failure',
-        iframeLoaded: !turn.embed?.url // If no URL (failure), mark as loaded
+        iframeLoaded: !turn.embed?.url, // If no URL (failure), mark as loaded
+        sql_explanation_visible: turn.sql_explanation_visible || false // Preserve visibility state or default to false
       }));
       
       this.currentChatId = chatId;
@@ -399,8 +413,14 @@ export class App implements OnInit, OnDestroy {
       const mostRecentTurn = this.conversation[this.conversation.length - 1];
       const chatTitle = mostRecentTurn?.embed?.title || this.conversation[0]?.question || 'New Chat';
 
+      // Ensure sql_explanation_visible is included in the saved conversation
+      const conversationToSave = this.conversation.map(turn => ({
+        ...turn,
+        sql_explanation_visible: turn.sql_explanation_visible || false
+      }));
+
       const response = await firstValueFrom(
-        this.apiService.saveChat<{chat_id: string}>(this.currentChatId, this.conversation, chatTitle)
+        this.apiService.saveChat<{chat_id: string}>(this.currentChatId, conversationToSave, chatTitle)
       );
 
       this.currentChatId = response.chat_id;

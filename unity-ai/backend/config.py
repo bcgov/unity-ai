@@ -37,7 +37,7 @@ class MetabaseConfig:
 @dataclass
 class AIConfig:
     """AI/LLM configuration settings"""
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-large"
     completion_endpoint: str = ""
     completion_key: str = ""
@@ -51,7 +51,7 @@ class AppConfig:
     flask_env: str
     debug: bool
     testing: bool
-    embed_worksheets: bool = True
+    embed_worksheets: bool = False
     collection_name: str = "embedded_schema"
     
 
@@ -100,7 +100,7 @@ class Config:
             "Cyrus Org": {
                 "db_id": 3,
                 "collection_id": 47,
-                "schema_types": ["public", "custom"]
+                "schema_types": ["public"]
             },
             "default": {
                 "db_id": 3,

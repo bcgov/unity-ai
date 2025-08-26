@@ -8,4 +8,5 @@ export interface Turn {
   iframeLoaded: boolean; 
   sqlPanelOpen?: boolean; // Optional property to track SQL panel state
   sql_explanation?: string; // SQL explanation text
+  sql_explanation_visible?: boolean; // Toggle visibility of SQL explanation
 }

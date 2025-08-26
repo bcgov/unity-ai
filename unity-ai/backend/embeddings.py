@@ -4,7 +4,7 @@ Handles schema embedding and similarity search for NL to SQL.
 """
 from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, AzureOpenAIEmbeddings
 from langchain_postgres import PGVector
 from config import config
 from database import db_manager
@@ -102,7 +102,20 @@ class EmbeddingManager:
     """Manages vector embeddings for schema similarity search"""
     
     def __init__(self):
-        self.embedding_model = OpenAIEmbeddings(model=config.ai.embedding_model)
+        # Initialize embeddings model based on configuration
+        if config.ai.use_azure:
+            self.embedding_model = AzureOpenAIEmbeddings(
+                azure_endpoint=config.ai.azure_endpoint,
+                api_key=config.ai.azure_api_key,
+                azure_deployment=config.ai.azure_embedding_deployment,
+                api_version=config.ai.azure_api_version
+            )
+        else:
+            self.embedding_model = OpenAIEmbeddings(
+                model=config.ai.embedding_model,
+                api_key=config.ai.completion_key
+            )
+        
         self.vector_store = PGVector(
             embeddings=self.embedding_model,
             collection_name=config.app.collection_name,

@@ -37,12 +37,27 @@ class MetabaseConfig:
 @dataclass
 class AIConfig:
     """AI/LLM configuration settings"""
+    # Azure OpenAI settings
+    azure_endpoint: str = ""
+    azure_api_key: str = ""
+    azure_deployment: str = ""
+    azure_api_version: str = "2024-02-01"
+    azure_embedding_deployment: str = ""
+    
+    # Model settings
     model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-large"
-    completion_endpoint: str = ""
-    completion_key: str = ""
     temperature: float = 0.2
     k_samples: int = 7
+    
+    # Legacy OpenAI settings (kept for compatibility)
+    completion_endpoint: str = ""
+    completion_key: str = ""
+    
+    @property
+    def use_azure(self) -> bool:
+        """Check if Azure OpenAI should be used"""
+        return bool(self.azure_endpoint and self.azure_api_key and self.azure_deployment)
 
 
 @dataclass
@@ -74,8 +89,16 @@ class Config:
         )
         
         self.ai = AIConfig(
+            # Azure OpenAI settings
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+            azure_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
+            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+            azure_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_embedding_deployment=os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", ""),
+            # Model settings
             model=os.getenv("AI_MODEL", "gpt-4o-mini"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
+            # Legacy OpenAI settings
             completion_endpoint=os.getenv("COMPLETION_ENDPOINT", ""),
             completion_key=os.getenv("COMPLETION_KEY", "")
         )

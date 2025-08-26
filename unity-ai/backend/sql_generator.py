@@ -93,22 +93,42 @@ class SQLGenerator:
         """Fetch a single completion from the LLM"""
         print(f"[{index}] Tokens in prompt: {len(self.tokenizer.encode(prompt))}")
         
-        headers = {
-            "Authorization": f"Bearer {self.config.completion_key}",
-            "Content-Type": "application/json"
-        }
-        
-        json_data = {
-            "model": self.config.model,
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": self.config.temperature
-        }
+        if self.config.use_azure:
+            # Use Azure OpenAI
+            headers = {
+                "api-key": self.config.azure_api_key,
+                "Content-Type": "application/json"
+            }
+            
+            endpoint = f"{self.config.azure_endpoint}/openai/deployments/{self.config.azure_deployment}/chat/completions?api-version={self.config.azure_api_version}"
+            
+            json_data = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": self.config.temperature
+            }
+        else:
+            # Use standard OpenAI
+            headers = {
+                "Authorization": f"Bearer {self.config.completion_key}",
+                "Content-Type": "application/json"
+            }
+            
+            endpoint = self.config.completion_endpoint
+            
+            json_data = {
+                "model": self.config.model,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": self.config.temperature
+            }
         
         async with session.post(
-            self.config.completion_endpoint,
+            endpoint,
             headers=headers,
             json=json_data
         ) as response:
@@ -405,7 +425,7 @@ ORDER BY
     
     async def explain_sql(self, sql: str) -> str:
         """
-        Generate a concise explanation of the given SQL query using GPT-3.5-turbo.
+        Generate a concise explanation of the given SQL query.
         
         Args:
             sql: The SQL query to explain
@@ -418,23 +438,43 @@ ORDER BY
 
 {sql}"""
             
-            headers = {
-                "Authorization": f"Bearer {self.config.completion_key}",
-                "Content-Type": "application/json"
-            }
-            
-            json_data = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant that explains SQL queries in simple terms."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3
-            }
+            if self.config.use_azure:
+                # Use Azure OpenAI
+                headers = {
+                    "api-key": self.config.azure_api_key,
+                    "Content-Type": "application/json"
+                }
+                
+                endpoint = f"{self.config.azure_endpoint}/openai/deployments/{self.config.azure_deployment}/chat/completions?api-version={self.config.azure_api_version}"
+                
+                json_data = {
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant that explains SQL queries in simple terms."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3
+                }
+            else:
+                # Use standard OpenAI
+                headers = {
+                    "Authorization": f"Bearer {self.config.completion_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                endpoint = self.config.completion_endpoint
+                
+                json_data = {
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant that explains SQL queries in simple terms."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3
+                }
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    self.config.completion_endpoint,
+                    endpoint,
                     headers=headers,
                     json=json_data
                 ) as response:

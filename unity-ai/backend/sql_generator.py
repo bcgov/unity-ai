@@ -230,7 +230,7 @@ class SQLGenerator:
             # Validate SQL
             is_valid, error = self.metabase.validate_sql(sql, db_id)
             if not is_valid:
-                print(f"SQL validation failed: {error}")
+                print(f"SQL validation failed: {error}\nFor sql: {sql}")
                 continue
             
             # Generate fingerprint
@@ -368,7 +368,7 @@ ORDER BY a."RegionalDistrict" ASC;''',
                     "visualization_options": ["bar", "pie", "map"]
                 }
             ),
-            "For indigenous organizations only": (
+            "For indegenous organizations only": (
                 '''SELECT "public"."Applications"."RegionalDistrict" AS "RegionalDistrict",
 SUM("public"."Applications"."ApprovedAmount") AS "sum"
 FROM
@@ -402,6 +402,54 @@ ORDER BY
             time.sleep(2)
             return examples[question]
         return None
+    
+    async def explain_sql(self, sql: str) -> str:
+        """
+        Generate a concise explanation of the given SQL query using GPT-3.5-turbo.
+        
+        Args:
+            sql: The SQL query to explain
+            
+        Returns:
+            A short, user-friendly explanation of what the SQL does
+        """
+        try:
+            prompt = f"""Please provide an extremely succinct explanation of this SQL you created. Start with "I've..." and include details such as mentioning which columns you got specific details from:
+
+{sql}"""
+            
+            headers = {
+                "Authorization": f"Bearer {self.config.completion_key}",
+                "Content-Type": "application/json"
+            }
+            
+            json_data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant that explains SQL queries in simple terms."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 100
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.config.completion_endpoint,
+                    headers=headers,
+                    json=json_data
+                ) as response:
+                    if response.status != 200:
+                        print(f"Error explaining SQL: {response.status}")
+                        return "This query retrieves and analyzes your data."
+                    
+                    data = await response.json()
+                    explanation = data["choices"][0]["message"]["content"].strip()
+                    return explanation
+                    
+        except Exception as e:
+            print(f"Error generating SQL explanation: {e}")
+            return "This query retrieves and analyzes your data."
 
 
 # Global SQL generator instance

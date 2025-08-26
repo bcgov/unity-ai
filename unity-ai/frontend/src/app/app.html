@@ -60,6 +60,8 @@
               </div>
             </div>
             <div class="bot-inner" *ngIf="turn.safeUrl != 'loading' && turn.safeUrl != 'failure' " [class.loaded]="turn.iframeLoaded">
+              
+              <app-sql-explanation [explanation]="turn.embed.sql_explanation"></app-sql-explanation>
 
               <iframe
                 [src]="turn.safeUrl"

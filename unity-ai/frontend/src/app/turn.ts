@@ -7,4 +7,5 @@ export interface Turn {
   safeUrl: SafeResourceUrl | null; 
   iframeLoaded: boolean; 
   sqlPanelOpen?: boolean; // Optional property to track SQL panel state
+  sql_explanation?: string; // SQL explanation text
 }

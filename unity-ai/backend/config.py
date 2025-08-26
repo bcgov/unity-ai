@@ -37,7 +37,7 @@ class MetabaseConfig:
 @dataclass
 class AIConfig:
     """AI/LLM configuration settings"""
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o"
     embedding_model: str = "text-embedding-3-large"
     completion_endpoint: str = ""
     completion_key: str = ""

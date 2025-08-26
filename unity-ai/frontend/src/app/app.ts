@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
 import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlLoaderComponent } from './sql-loader/sql-loader';
+import { SqlExplanationComponent } from './sql-explanation/sql-explanation';
 import { AuthService } from './services/auth.service';
 import { ApiService } from './services/api.service';
 import { IframeDetectorService } from './iframe-detector.service';
@@ -14,7 +15,7 @@ import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlLoaderComponent, SidebarComponent],
+  imports: [CommonModule, FormsModule, SqlLoaderComponent, SqlExplanationComponent, SidebarComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -281,7 +282,7 @@ export class App implements OnInit, OnDestroy {
     // Always reset to table visualization for new questions
     this.selectedVisualization = 'table';
     
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false} as Turn;
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: ""} as Turn;
     this.conversation.push(turn);
     
     // Set the new turn as the current turn for navigation
@@ -295,6 +296,23 @@ export class App implements OnInit, OnDestroy {
       turn.embed = await firstValueFrom(
         this.apiService.askQuestion<Embed>(turn.question, this.conversation)
       );
+
+      if (turn.embed.url == "fail") {
+        throw new Error;
+      }
+      
+      // Fetch SQL explanation after SQL is generated
+      if (turn.embed.SQL) {
+        try {
+          const explanationResponse = await firstValueFrom(
+            this.apiService.explainSql<{ explanation: string }>(turn.embed.SQL)
+          );
+          turn.embed.sql_explanation = explanationResponse.explanation;
+        } catch (error) {
+          // If explanation fails, use a default message
+          turn.embed.sql_explanation = "This query retrieves and analyzes your data.";
+        }
+      }
       
       // New questions always start as table view
       turn.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(turn.embed.url);

@@ -1,15 +1,19 @@
 """
 API module with Flask routes for the application.
 """
-from flask import Flask, request, abort, jsonify
+from flask import Flask, request, abort, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import asyncio
-from typing import Dict, Any
+import json
+import aiohttp
+from typing import Dict, Any, Generator
 from config import config
 from database import db_manager, chat_repository
 from metabase import metabase_client
 from chat import chat_manager
 from sql_generator import sql_generator
+import openai
+import os
 
 
 def create_app():
@@ -144,6 +148,31 @@ def delete_question():
         return {"success": False}
 
 
+@app.route("/api/explain_sql", methods=["POST"])
+async def explain_sql():
+    """Generate a user-friendly explanation for SQL query"""
+    data = request.get_json()
+    
+    try:
+        sql = data.get("sql")
+        
+        if not sql:
+            return abort(400, "sql is required")
+        
+        # Generate explanation using the sql_generator
+        explanation = await sql_generator.explain_sql(sql)
+        
+        return {
+            "explanation": explanation
+        }, 200
+        
+    except Exception as e:
+        print(f"Error in /api/explain_sql: {e}")
+        return {
+            "explanation": "This query retrieves and analyzes your data."
+        }, 200
+
+
 # Chat management endpoints
 
 @app.route("/api/chats", methods=["POST"])
@@ -249,8 +278,13 @@ def run_async(coro):
         loop.close()
 
 
-# Wrap async route handler
+# Wrap async route handlers
 original_ask = ask
 def ask():
     return run_async(original_ask())
 app.view_functions['ask'] = ask
+
+original_explain_sql = explain_sql
+def explain_sql():
+    return run_async(original_explain_sql())
+app.view_functions['explain_sql'] = explain_sql

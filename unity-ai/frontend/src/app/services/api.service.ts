@@ -84,6 +84,12 @@ export class ApiService {
     });
   }
 
+  explainSql<T>(sql: string): Observable<T> {
+    return this.post<T>('/explain_sql', {
+      sql: sql
+    });
+  }
+
   // Chat-related methods
   getChats<T>(): Observable<T> {
     return this.post<T>('/chats', {});

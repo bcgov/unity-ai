@@ -127,14 +127,11 @@ METABASE_KEY=your-metabase-api-key
 MB_EMBED_SECRET=your-embed-secret
 
 # AI Configuration
-AI_MODEL=gpt-4o-mini
-EMBEDDING_MODEL=text-embedding-3-large
-COMPLETION_ENDPOINT=https://api.openai.com/v1/chat/completions
-COMPLETION_KEY=your-openai-api-key
-
-# Application Settings
-FLASK_ENV=development
-EMBED_WORKSHEETS=true
+AZURE_OPENAI_ENDPOINT=your_endpoint_here
+AZURE_OPENAI_API_KEY=your_key_here
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-large
+AZURE_OPENAI_API_VERSION=2024-02-01
 ```
 
 ### Tenant Configuration

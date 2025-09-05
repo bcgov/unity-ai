@@ -58,8 +58,6 @@ services:
   frontend:
     build: 
       context: ./frontend
-      args:
-        - JWT_SECRET=${JWT_SECRET}
     env_file:
       - ../.env
     ports:

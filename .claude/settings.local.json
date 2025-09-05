@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/C:\\Users\\CKPARSON\\OneDrive - Government of BC\\Documents\\Programming\\MetabaseReporter\\unity-ai\\unity-ai\\frontend/**)",
+      "Read(/C:\\Users\\CKPARSON\\OneDrive - Government of BC\\Documents\\Programming\\MetabaseReporter\\unity-ai\\unity-ai\\frontend\\src\\environments/**)",
+      "Read(/C:\\Users\\CKPARSON\\OneDrive - Government of BC\\Documents\\Programming\\MetabaseReporter\\unity-ai\\unity-ai\\frontend\\src\\app\\services/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

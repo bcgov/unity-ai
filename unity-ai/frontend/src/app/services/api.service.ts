@@ -15,48 +15,43 @@ export class ApiService {
     private authService: AuthService
   ) {}
 
-  private appendAuthData(body: any = {}): any {
-    return {
-      ...body,
-      metabase_url: this.authService.getMetabaseUrl(),
-      tenant_id: this.authService.getTenantId(),
-      user_id: this.authService.getUserId()
-    };
-  }
-
   private getHeaders(): HttpHeaders {
-    return new HttpHeaders({
+    const headers: any = {
       'Content-Type': 'application/json'
-    });
+    };
+
+    // Add JWT token to Authorization header if available
+    const token = this.authService.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return new HttpHeaders(headers);
   }
 
   // Wrapper methods for common HTTP operations
   post<T>(endpoint: string, body: any = {}): Observable<T> {
-    const enrichedBody = this.appendAuthData(body);
-    return this.http.post<T>(`${this.api_url}${endpoint}`, enrichedBody, {
+    return this.http.post<T>(`${this.api_url}${endpoint}`, body, {
       headers: this.getHeaders()
     });
   }
 
   get<T>(endpoint: string, params: any = {}): Observable<T> {
-    const enrichedParams = this.appendAuthData(params);
     return this.http.get<T>(`${this.api_url}${endpoint}`, { 
-      params: enrichedParams,
+      params: params,
       headers: this.getHeaders()
     });
   }
 
   put<T>(endpoint: string, body: any = {}): Observable<T> {
-    const enrichedBody = this.appendAuthData(body);
-    return this.http.put<T>(`${this.api_url}${endpoint}`, enrichedBody, {
+    return this.http.put<T>(`${this.api_url}${endpoint}`, body, {
       headers: this.getHeaders()
     });
   }
 
   delete<T>(endpoint: string, body: any = {}): Observable<T> {
-    const enrichedBody = this.appendAuthData(body);
     return this.http.delete<T>(`${this.api_url}${endpoint}`, { 
-      body: enrichedBody,
+      body: body,
       headers: this.getHeaders()
     });
   }
@@ -96,9 +91,7 @@ export class ApiService {
   }
 
   getChat<T>(chatId: string): Observable<T> {
-    return this.post<T>(`/chats/${chatId}`, {
-      chat_id: chatId
-    });
+    return this.post<T>(`/chats/${chatId}`, {});
   }
 
   saveChat<T>(chatId: string | null, conversation: any[], title: string): Observable<T> {
@@ -110,8 +103,11 @@ export class ApiService {
   }
 
   deleteChat<T>(chatId: string): Observable<T> {
-    return this.delete<T>(`/chats/${chatId}`, {
-      chat_id: chatId
-    });
+    return this.delete<T>(`/chats/${chatId}`, {});
+  }
+
+  // Token validation method
+  validateToken<T>(): Observable<T> {
+    return this.post<T>('/validate-token', {});
   }
 }

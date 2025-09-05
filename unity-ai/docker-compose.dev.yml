@@ -3,8 +3,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-      args:
-        - JWT_SECRET=${JWT_SECRET}
     ports:
       - "80:80"
     env_file:
@@ -14,8 +12,6 @@ services:
       - ./frontend/angular.json:/app/angular.json
       - ./frontend/package.json:/app/package.json
       - ./frontend/tsconfig.json:/app/tsconfig.json
-      # Exclude environment files to prevent overwriting the JWT_SECRET replacement
-      - /app/src/environments
     environment:
       - NODE_ENV=development
     networks:

@@ -12,6 +12,7 @@ from database import db_manager, chat_repository
 from metabase import metabase_client
 from chat import chat_manager
 from sql_generator import sql_generator
+from auth import require_auth, optional_auth, auth_manager, get_user_from_token
 import openai
 import os
 
@@ -37,22 +38,116 @@ def health_check():
     return "Backend is working!"
 
 
+@app.route("/health")
+def health():
+    """
+    Health endpoint for monitoring - basic liveness check
+    Returns 200 if the service is running
+    """
+    return jsonify({
+        "status": "healthy",
+        "service": "unity-ai-backend",
+        "version": "1.0.0"
+    }), 200
+
+
+@app.route("/ready")
+def ready():
+    """
+    Readiness endpoint for deployment - checks dependencies
+    Returns 200 if the service is ready to serve requests
+    """
+    try:
+        # Check database connection
+        db_status = "healthy"
+        try:
+            # Test database connection
+            db_manager.get_connection()
+            db_status = "healthy"
+        except Exception as e:
+            db_status = f"unhealthy: {str(e)}"
+            
+        # Check JWT secret configuration
+        jwt_status = "healthy"
+        try:
+            from auth import auth_manager
+            if not auth_manager.jwt_secret:
+                jwt_status = "unhealthy: JWT_SECRET not configured"
+        except Exception as e:
+            jwt_status = f"unhealthy: {str(e)}"
+            
+        # Check environment configuration
+        config_status = "healthy"
+        try:
+            # Test basic config access
+            config.app.debug  # This will fail if config is broken
+        except Exception as e:
+            config_status = f"unhealthy: {str(e)}"
+            
+        # Determine overall readiness
+        all_healthy = all(
+            status == "healthy" 
+            for status in [db_status, jwt_status, config_status]
+        )
+        
+        response_data = {
+            "status": "ready" if all_healthy else "not ready",
+            "service": "unity-ai-backend",
+            "version": "1.0.0",
+            "checks": {
+                "database": db_status,
+                "jwt_auth": jwt_status,
+                "configuration": config_status
+            }
+        }
+        
+        return jsonify(response_data), 200 if all_healthy else 503
+        
+    except Exception as e:
+        return jsonify({
+            "status": "not ready",
+            "service": "unity-ai-backend",
+            "version": "1.0.0",
+            "error": str(e)
+        }), 503
+
+
+@app.route("/api/validate-token", methods=["POST"])
+@require_auth
+def validate_token():
+    """
+    Validate JWT token and return user information
+    """
+    user_data = get_user_from_token()
+    return jsonify({
+        "valid": True,
+        "user_id": user_data["user_id"],
+        "tenant_id": user_data["tenant"],
+        "metabase_url": user_data["mb_url"],
+        "expires": user_data["exp"]
+    }), 200
+
+
 @app.route("/api/ask", methods=["POST"])
+@require_auth
 async def ask():
     """
     Main endpoint for processing natural language queries.
     Generates SQL and creates Metabase cards.
     """
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
         question = data.get("question")
         conversation = data.get("conversation", [])
-        metabase_url = data.get("metabase_url")
-        tenant_id = data.get("tenant_id", "default")
         
-        if not all([question, metabase_url]):
-            return abort(400, "question and metabase_url are required")
+        # Extract user context from JWT token
+        metabase_url = user_data["mb_url"]
+        tenant_id = user_data["tenant"]
+        
+        if not question:
+            return abort(400, "question is required")
         
         # Get tenant configuration
         tenant_config = config.get_tenant_config(tenant_id)
@@ -61,24 +156,80 @@ async def ask():
         
         print(f"Request - Tenant: {tenant_id}, DB: {db_id}, Collection: {collection_id}")
         
-        # Extract past questions from conversation
-        past_questions = chat_manager.extract_past_questions(conversation)
-        
-        # Generate SQL from natural language
-        sql, metadata = await sql_generator.generate_sql(
-            question, past_questions, db_id
-        )
-        
-        if not sql or not metadata:
-            return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
-        
-        # Create Metabase card
-        card_id = metabase_client.create_card(
-            sql, db_id, collection_id, metadata['title']
-        )
-        
-        # Generate embed URL
-        embed_url = metabase_client.generate_embed_url(card_id)
+        try:
+            # Extract past questions from conversation
+            past_questions = chat_manager.extract_past_questions(conversation)
+            print(f"Extracted {len(past_questions)} past questions")
+            
+            # Generate SQL from natural language
+            print("Starting SQL generation...")
+            try:
+                sql, metadata = await sql_generator.generate_sql(
+                    question, past_questions, db_id
+                )
+                print(f"SQL generation completed. SQL exists: {bool(sql)}, Metadata exists: {bool(metadata)}")
+            except Exception as sql_error:
+                print(f"SQL generation failed with error: {sql_error}")
+                print(f"Error type: {type(sql_error)}")
+                # Check if it's a rate limit or connection error
+                if "429" in str(sql_error) or "rate limit" in str(sql_error).lower():
+                    print("Azure OpenAI rate limit exceeded")
+                    return jsonify({
+                        "error": "Rate limit exceeded", 
+                        "message": "Azure OpenAI rate limit exceeded. Please try again in a few moments.",
+                        "url": "rate_limit"
+                    }), 429
+                elif "Connection aborted" in str(sql_error) or "RemoteDisconnected" in str(sql_error):
+                    print("Connection error during SQL generation")
+                    return jsonify({
+                        "error": "Connection error",
+                        "message": "Connection error during SQL generation. Please try again.",
+                        "url": "connection_error"
+                    }), 503
+                else:
+                    print("Unknown error during SQL generation")
+                    return jsonify({
+                        "error": "SQL generation failed",
+                        "message": "Unable to generate SQL query. Please try again.",
+                        "url": "fail"
+                    }), 500
+            
+            if not sql or not metadata:
+                print("SQL generation failed - returning fail response")
+                return {"url": "fail", "card_id": 0, "x_field": "", "y_field": ""}, 200
+            
+            print(f"SQL: {sql}")
+            print(f"Metadata: {metadata}")
+            print(f"About to create Metabase card...")
+            print(f"Metabase client type: {type(metabase_client)}")
+            
+            # Create Metabase card
+            print(f"Creating Metabase card with SQL length: {len(sql)}")
+            try:
+                print("Calling metabase_client.create_card...")
+                card_id = metabase_client.create_card(
+                    sql, db_id, collection_id, metadata['title']
+                )
+                print(f"Card created successfully with ID: {card_id}")
+            except Exception as card_error:
+                print(f"Error during card creation: {card_error}")
+                print(f"Card error type: {type(card_error)}")
+                raise card_error
+            
+            # Generate embed URL
+            print("Generating embed URL...")
+            try:
+                print("Calling metabase_client.generate_embed_url...")
+                embed_url = metabase_client.generate_embed_url(card_id)
+                print(f"Embed URL generated successfully: {embed_url[:50]}...")
+            except Exception as embed_error:
+                print(f"Error during embed URL generation: {embed_error}")
+                print(f"Embed error type: {type(embed_error)}")
+                raise embed_error
+            
+        except Exception as step_error:
+            print(f"Error in specific step: {step_error}")
+            raise step_error
         
         return {
             "url": embed_url,
@@ -96,9 +247,11 @@ async def ask():
 
 
 @app.route("/api/change_display", methods=["POST"])
+@require_auth
 def change_display():
     """Update visualization type for a Metabase card"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
         mode = data.get("mode")
@@ -130,9 +283,11 @@ def change_display():
 
 
 @app.route("/api/delete", methods=["POST"])
+@require_auth
 def delete_question():
     """Delete a Metabase card"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
         card_id = data.get("card_id")
@@ -149,9 +304,11 @@ def delete_question():
 
 
 @app.route("/api/explain_sql", methods=["POST"])
+@require_auth
 async def explain_sql():
     """Generate a user-friendly explanation for SQL query"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
         sql = data.get("sql")
@@ -176,16 +333,16 @@ async def explain_sql():
 # Chat management endpoints
 
 @app.route("/api/chats", methods=["POST"])
+@require_auth
 def get_chats():
     """Get all chats for a user"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
-        user_id = data.get("user_id")
-        tenant_id = data.get("tenant_id", "default")
-        
-        if not user_id:
-            return abort(400, "user_id is required")
+        # Extract user context from JWT token
+        user_id = user_data["user_id"]
+        tenant_id = user_data["tenant"]
         
         chats = chat_manager.get_user_chats(user_id, tenant_id)
         return jsonify(chats), 200
@@ -196,15 +353,15 @@ def get_chats():
 
 
 @app.route("/api/chats/<chat_id>", methods=["POST"])
+@require_auth
 def get_chat(chat_id):
     """Get a specific chat and validate/recreate cards"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
-        user_id = data.get("user_id")
-        
-        if not user_id:
-            return abort(400, "user_id is required")
+        # Extract user ID from JWT token
+        user_id = user_data["user_id"]
         
         chat_data = chat_manager.get_chat_with_card_validation(chat_id, user_id)
         
@@ -219,20 +376,24 @@ def get_chat(chat_id):
 
 
 @app.route("/api/chats/save", methods=["POST"])
+@require_auth
 def save_chat():
     """Save or update a chat"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
-        user_id = data.get("user_id")
-        tenant_id = data.get("tenant_id", "default")
-        metabase_url = data.get("metabase_url")
+        # Extract user context from JWT token
+        user_id = user_data["user_id"]
+        tenant_id = user_data["tenant"]
+        metabase_url = user_data["mb_url"]
+        
         chat_id = data.get("chat_id")
         title = data.get("title")
         conversation = data.get("conversation")
         
-        if not all([user_id, title, conversation]):
-            return abort(400, "user_id, title, and conversation are required")
+        if not all([title, conversation]):
+            return abort(400, "title and conversation are required")
         
         result_chat_id = chat_manager.save_chat(
             user_id, tenant_id, metabase_url, title, conversation, chat_id
@@ -246,15 +407,15 @@ def save_chat():
 
 
 @app.route("/api/chats/<chat_id>", methods=["DELETE"])
+@require_auth
 def delete_chat(chat_id):
     """Delete a chat"""
     data = request.get_json()
+    user_data = get_user_from_token()
     
     try:
-        user_id = data.get("user_id")
-        
-        if not user_id:
-            return abort(400, "user_id is required")
+        # Extract user ID from JWT token
+        user_id = user_data["user_id"]
         
         success = chat_manager.delete_chat(chat_id, user_id)
         

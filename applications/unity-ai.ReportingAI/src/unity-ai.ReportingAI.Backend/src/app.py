@@ -14,7 +14,7 @@ def embed_schemas_command(db_id: int = None):
     if db_id is None:
         db_id = config.metabase.default_db_id
     
-    print(f"Beginning schema embedding process for db_id: {db_id}...")
+    print(f"Beginning schema embedding process for db_id: {db_id}...") 
     
     # Get schema types for this database from config
     tenant_config = None

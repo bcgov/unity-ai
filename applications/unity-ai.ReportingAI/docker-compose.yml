@@ -18,19 +18,23 @@ services:
       retries: 5
 
   backend:
-    build: .
+    build: 
+      context: ./src/unity-ai.ReportingAI.Backend
+      args:
+        - OPENAI_API_KEY=${OPENAI_API_KEY}
+        - JWT_SECRET=${JWT_SECRET}
+        - METABASE_URL=${METABASE_URL}
+        - METABASE_USERNAME=${METABASE_USERNAME}
+        - METABASE_PASSWORD=${METABASE_PASSWORD}
+        - DB_HOST=postgres
+        - DB_PORT=5432
+        - DB_NAME=unity_ai
+        - DB_USER=unity_user
+        - DB_PASSWORD=unity_pass
     ports:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=unity_ai
-      - DB_USER=unity_user
-      - DB_PASSWORD=unity_pass
-    env_file:
-      - ../.env
-    # No volume mounts needed - backend code is copied into container
     networks:
       - unity-ai-network
     depends_on:
@@ -42,26 +46,11 @@ services:
       timeout: 10s
       retries: 3
 
-  # pgadmin:
-  #   image: dpage/pgadmin4:latest
-  #   environment:
-  #     PGADMIN_DEFAULT_EMAIL: admin@example.com
-  #     PGADMIN_DEFAULT_PASSWORD: admin
-  #   ports:
-  #     - "8080:80"
-  #   networks:
-  #     - unity-ai-network
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
   frontend:
     build: 
-      context: ./frontend
+      context: ./src/unity-ai.ReportingAI.Frontend
       args:
         - JWT_SECRET=${JWT_SECRET}
-    env_file:
-      - ../.env
     ports:
       - "80:80"
     depends_on:

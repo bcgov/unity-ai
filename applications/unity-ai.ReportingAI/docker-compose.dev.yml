@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: unity_ai
+      POSTGRES_USER: unity_user
+      POSTGRES_PASSWORD: unity_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - unity-ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unity_user -d unity_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: 
+      context: ./src/unity-ai.ReportingAI.Backend
+      args:
+        - OPENAI_API_KEY=${OPENAI_API_KEY}
+        - JWT_SECRET=${JWT_SECRET}
+        - METABASE_URL=${METABASE_URL}
+        - METABASE_USERNAME=${METABASE_USERNAME}
+        - METABASE_PASSWORD=${METABASE_PASSWORD}
+        - DB_HOST=postgres
+        - DB_PORT=5432
+        - DB_NAME=unity_ai
+        - DB_USER=unity_user
+        - DB_PASSWORD=unity_pass
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+    volumes:
+      - ./src/unity-ai.ReportingAI.Backend/src:/app
+    networks:
+      - unity-ai-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python app.py
+
+  frontend:
+    build:
+      context: ./src/unity-ai.ReportingAI.Frontend
+      dockerfile: Dockerfile.dev
+      args:
+        - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "80:80"
+    volumes:
+      - ./src/unity-ai.ReportingAI.Frontend/src:/app/src
+      - ./src/unity-ai.ReportingAI.Frontend/angular.json:/app/angular.json
+      - ./src/unity-ai.ReportingAI.Frontend/package.json:/app/package.json
+      - ./src/unity-ai.ReportingAI.Frontend/tsconfig.json:/app/tsconfig.json
+      - /app/src/environments
+    environment:
+      - NODE_ENV=development
+    networks:
+      - unity-ai-network
+    depends_on:
+      - backend
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    networks:
+      - unity-ai-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  unity-ai-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

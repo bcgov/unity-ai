@@ -219,5 +219,6 @@ jobs:
         docker logout
     - name: Trigger OpenShift deployment restart
       run: |
-        oc rollout restart statefulset uat-unity-ai-web
-        oc rollout restart statefulset uat-unity-ai-api
+        echo "Triggering rollout restart of statefulsets in project $OC_TARGET_PROJECT"
+        # oc rollout restart statefulset uat-unity-ai-web
+        # oc rollout restart statefulset uat-unity-ai-api

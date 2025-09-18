@@ -22,7 +22,7 @@ A comprehensive AI-powered reporting system that integrates with Metabase to pro
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd unity-ai/applications/unity-ai.ReportingAI
+cd unity-ai/applications
 ```
 
 2. Set required environment variables:
@@ -78,14 +78,14 @@ docker-compose up --build -d
 ## Project Structure
 
 ```
-applications/unity-ai.ReportingAI/
+applications/
 ├── src/
-│   ├── unity-ai.ReportingAI.Backend/    # Python Flask backend
-│   └── unity-ai.ReportingAI.Frontend/   # Angular frontend
+│   ├── Unity.AI.Reporting.Backend/     # Python Flask backend
+│   └── Unity.AI.Reporting.Frontend/    # Angular frontend
 ├── docker-compose.yml                   # Production compose
 └── docker-compose.dev.yml              # Development compose
 ```
 
 See individual component READMEs for detailed documentation:
-- [Backend Documentation](./src/unity-ai.ReportingAI.Backend/README.md)
-- [Frontend Documentation](./src/unity-ai.ReportingAI.Frontend/README.md)
+- [Backend Documentation](./applications/src/Unity.AI.Reporting.Backend/README.md)
+- [Frontend Documentation](./applications/src/Unity.AI.Reporting.Frontend/README.md)

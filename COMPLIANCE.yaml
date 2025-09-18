@@ -3,8 +3,8 @@ description: |
   This document is used to track a projects PIA and STRA compliance.
 spec:
   - name: PIA
-    status: approved
-    last-updated: '2024-11-06T00:16:00.000Z'
+    status: draft
+    last-updated: '2025-09-02T00:16:00.000Z'
   - name: STRA
-    status: approved
-    last-updated: '2024-11-15T00:16:00.000Z'
+    status: draft
+    last-updated: '2025-09-02T00:16:00.000Z'

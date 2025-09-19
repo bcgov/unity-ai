@@ -163,5 +163,5 @@ jobs:
     - name: Trigger OpenShift deployment restart
       run: |
         echo "Triggering rollout restart of statefulsets in project $OC_TARGET_PROJECT"
-        # oc rollout restart statefulset dev-unity-ai-web
-        # oc rollout restart statefulset dev-unity-ai-api
+        oc rollout restart statefulset dev-unity-ai-frontend
+        oc rollout restart statefulset dev-unity-ai-backend

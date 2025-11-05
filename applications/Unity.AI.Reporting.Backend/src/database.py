@@ -2,9 +2,13 @@
 Database module for managing PostgreSQL connections and operations.
 """
 import psycopg
+import logging
 from typing import Any, List, Dict, Optional
 import json
 from config import config
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
@@ -56,6 +60,12 @@ class DatabaseManager:
                         user_agent TEXT,
                         metadata JSONB,
                         status TEXT DEFAULT 'open',
+                        current_question TEXT,
+                        current_sql TEXT,
+                        current_sql_explanation TEXT,
+                        previous_question TEXT,
+                        previous_sql TEXT,
+                        previous_sql_explanation TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
@@ -81,19 +91,19 @@ class DatabaseManager:
             collection_name: Name of the collection to purge
         """
         if db_id:
-            print(f"Purging existing embeddings for db_id: {db_id}...")
+            logger.info(f"Purging existing embeddings for db_id: {db_id}...")
         else:
-            print("Purging all existing embeddings...")
-        
+            logger.info("Purging all existing embeddings...")
+
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     if db_id:
                         # Delete only embeddings for specific db_id
                         cur.execute("""
-                            DELETE FROM langchain_pg_embedding 
+                            DELETE FROM langchain_pg_embedding
                             WHERE collection_id IN (
-                                SELECT uuid FROM langchain_pg_collection 
+                                SELECT uuid FROM langchain_pg_collection
                                 WHERE name = %s
                             )
                             AND cmetadata->>'db_id' = %s
@@ -101,18 +111,18 @@ class DatabaseManager:
                     else:
                         # Delete all embeddings
                         cur.execute("""
-                            DELETE FROM langchain_pg_embedding 
+                            DELETE FROM langchain_pg_embedding
                             WHERE collection_id IN (
-                                SELECT uuid FROM langchain_pg_collection 
+                                SELECT uuid FROM langchain_pg_collection
                                 WHERE name = %s
                             )
                         """, (collection_name,))
-                    
+
                     deleted_count = cur.rowcount
                     conn.commit()
-                    print(f"Purged {deleted_count} existing embeddings")
+                    logger.info(f"Purged {deleted_count} existing embeddings")
         except Exception as e:
-            print(f"Error purging embeddings: {e}")
+            logger.error(f"Error purging embeddings: {e}", exc_info=True)
             raise
 
 
@@ -227,18 +237,25 @@ class FeedbackRepository:
     def __init__(self, db_manager: DatabaseManager):
         self.db = db_manager
     
-    def submit_feedback(self, chat_id: str, user_id: str, tenant_id: str, 
-                       feedback_type: str, message: str, user_agent: str = None, 
-                       metadata: Dict = None) -> str:
+    def submit_feedback(self, chat_id: str, user_id: str, tenant_id: str,
+                       feedback_type: str, message: str, user_agent: str = None,
+                       metadata: Dict = None, current_question: str = None,
+                       current_sql: str = None, current_sql_explanation: str = None,
+                       previous_question: str = None, previous_sql: str = None,
+                       previous_sql_explanation: str = None) -> str:
         """Submit feedback for a chat"""
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO feedback (chat_id, user_id, tenant_id, feedback_type, message, user_agent, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO feedback (chat_id, user_id, tenant_id, feedback_type, message, user_agent, metadata,
+                                        current_question, current_sql, current_sql_explanation,
+                                        previous_question, previous_sql, previous_sql_explanation)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING feedback_id
-                """, (chat_id, user_id, tenant_id, feedback_type, message, user_agent, 
-                      json.dumps(metadata) if metadata else None))
+                """, (chat_id, user_id, tenant_id, feedback_type, message, user_agent,
+                      json.dumps(metadata) if metadata else None,
+                      current_question, current_sql, current_sql_explanation,
+                      previous_question, previous_sql, previous_sql_explanation))
                 
                 feedback_id = str(cur.fetchone()[0])
                 conn.commit()
@@ -251,6 +268,8 @@ class FeedbackRepository:
                 cur.execute("""
                     SELECT f.feedback_id, f.chat_id, f.user_id, f.tenant_id, f.feedback_type,
                            f.message, f.user_agent, f.metadata, f.status, f.created_at, f.updated_at,
+                           f.current_question, f.current_sql, f.current_sql_explanation,
+                           f.previous_question, f.previous_sql, f.previous_sql_explanation,
                            c.title as chat_title
                     FROM feedback f
                     LEFT JOIN chats c ON f.chat_id = c.chat_id
@@ -273,7 +292,13 @@ class FeedbackRepository:
                     "status": row[8],
                     "created_at": row[9].isoformat(),
                     "updated_at": row[10].isoformat(),
-                    "chat_title": row[11]
+                    "current_question": row[11],
+                    "current_sql": row[12],
+                    "current_sql_explanation": row[13],
+                    "previous_question": row[14],
+                    "previous_sql": row[15],
+                    "previous_sql_explanation": row[16],
+                    "chat_title": row[17]
                 }
     
     def get_feedback_by_chat(self, chat_id: str) -> List[Dict[str, Any]]:
@@ -304,14 +329,62 @@ class FeedbackRepository:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE feedback 
+                    UPDATE feedback
                     SET status = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE feedback_id = %s
                 """, (status, feedback_id))
-                
+
                 updated = cur.rowcount > 0
                 conn.commit()
                 return updated
+
+    def get_all_feedback(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get all feedback entries for admin view"""
+        with self.db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT f.feedback_id, f.chat_id, f.user_id, f.tenant_id, f.feedback_type,
+                           f.message, f.user_agent, f.metadata, f.status, f.created_at, f.updated_at,
+                           f.current_question, f.current_sql, f.current_sql_explanation,
+                           f.previous_question, f.previous_sql, f.previous_sql_explanation,
+                           c.title as chat_title,
+                           c.conversation->0->'embed'->'tokens' as tokens
+                    FROM feedback f
+                    LEFT JOIN chats c ON f.chat_id = c.chat_id
+                    ORDER BY f.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+
+                feedback_list = []
+                for row in cur.fetchall():
+                    feedback_item = {
+                        "feedback_id": str(row[0]),
+                        "chat_id": str(row[1]),
+                        "user_id": row[2],
+                        "tenant_id": row[3],
+                        "feedback_type": row[4],
+                        "message": row[5],
+                        "user_agent": row[6],
+                        "metadata": row[7],
+                        "status": row[8],
+                        "created_at": row[9].isoformat(),
+                        "updated_at": row[10].isoformat(),
+                        "current_question": row[11],
+                        "current_sql": row[12],
+                        "current_sql_explanation": row[13],
+                        "previous_question": row[14],
+                        "previous_sql": row[15],
+                        "previous_sql_explanation": row[16],
+                        "chat_title": row[17]
+                    }
+
+                    # Add token information if available
+                    if row[18]:
+                        feedback_item["tokens"] = row[18]
+
+                    feedback_list.append(feedback_item)
+
+                return feedback_list
 
 
 # Global instances

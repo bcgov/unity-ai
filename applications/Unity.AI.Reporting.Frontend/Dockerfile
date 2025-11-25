@@ -2,6 +2,7 @@
 FROM node:22-alpine AS build
 
 # Platform build metadata (safe to bake into image)
+ARG API_URL=https://localhost:5000/api
 ARG UAI_BUILD_VERSION=0.0.0
 ARG UAI_BUILD_REVISION=0000000
 
@@ -22,10 +23,13 @@ RUN npm run build -- --configuration=production
 # Create build info file with version and revision in the root of the built output
 RUN echo "{\"version\":\"${UAI_BUILD_VERSION}\",\"revision\":\"${UAI_BUILD_REVISION}\",\"buildDate\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > dist/recap/build-info.json
 
+# Create config.json file with API URL and environment settings
+RUN echo "{\"apiUrl\":\"${API_URL}\",\"environment\":\"production\",\"version\":\"${UAI_BUILD_VERSION}\"}" > dist/recap/browser/config.json
+
 # Production stage
 FROM nginx:alpine
 
-# Copy built application from build stage
+# Copy built application from build stage (includes config.json and build-info.json)
 COPY --from=build /app/dist/recap /usr/share/nginx/html
 
 # Copy nginx configuration
@@ -34,4 +38,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Expose port 80
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Use default nginx CMD (starts nginx in foreground)

@@ -27,7 +27,7 @@ docker-compose up -d
 
 ## Services
 
-- **Frontend**: http://localhost:80 - Angular chat interface
+- **Frontend**: http://localhost:80 - Angular chat interface (container port 8080)
 - **Backend**: http://localhost:5000 - Flask API
 - **Database**: localhost:5432 - PostgreSQL with pgvector
 - **pgAdmin** (dev): http://localhost:8080 - Database admin

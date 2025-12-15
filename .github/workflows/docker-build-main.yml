@@ -171,21 +171,15 @@ jobs:
     - name: Build Docker images
       run: |
         echo "buildArgs UNITY_AI_BUILD_VERSION: ${{env.UNITY_AI_BUILD_VERSION}}, UNITY_AI_BUILD_REVISION: ${{env.UNITY_AI_BUILD_REVISION}}"
-        docker build --build-arg UAI_BUILD_VERSION=${{env.UNITY_AI_BUILD_VERSION}} --build-arg UAI_BUILD_REVISION=${{env.UNITY_AI_BUILD_REVISION}} -t unity-ai-reporting -f applications/Dockerfile applications
-        docker build -t unity-ai-assessment-backend -f applications/Unity.AI.Assessment.Backend/Dockerfile applications/Unity.AI.Assessment.Backend
-        docker build -t unity-ai-assessment-frontend -f applications/Unity.AI.Assessment.Frontend/Dockerfile applications/Unity.AI.Assessment.Frontend
+        docker build --build-arg UAI_BUILD_VERSION=${{env.UNITY_AI_BUILD_VERSION}} --build-arg UAI_BUILD_REVISION=${{env.UNITY_AI_BUILD_REVISION}} --build-arg UAI_TARGET_ENVIRONMENT=Production -t unity-ai-reporting -f applications/Dockerfile applications
       working-directory: ./
     - name: Connect to JFrog Artifactory non-interactive login using --password-stdin
       run: |
         echo "$JFROG_PASSWORD" | docker login -u "$JFROG_USERNAME" --password-stdin $JFROG_SERVICE
     - name: Push application images to Artifactory container registry
       run: |
-        docker tag unity-ai-reporting $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-reporting:stable
-        docker push $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-reporting:stable
-        docker tag unity-ai-assessment-backend $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-assessment-backend:stable
-        docker push $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-assessment-backend:stable
-        docker tag unity-ai-assessment-frontend $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-assessment-frontend:stable
-        docker push $JFROG_SERVICE/$JFROG_REPO_PATH/unity-ai-assessment-frontend:stable
+        docker tag unity-ai-reporting $JFROG_SERVICE/$JFROG_REPO_PATH/uat-unity-ai-reporting:stable
+        docker push $JFROG_SERVICE/$JFROG_REPO_PATH/uat-unity-ai-reporting:stable
     - name: Disconnect docker from JFrog Artifactory
       run: |
         docker logout
@@ -203,12 +197,8 @@ jobs:
         docker login -u unused -p $(oc whoami -t) $OC_REGISTRY
     - name: Push application images to OpenShift container registry
       run: |
-        docker tag unity-ai-reporting $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-reporting:stable
-        docker push $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-reporting:stable
-        docker tag unity-ai-assessment-backend $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-assessment-backend:stable
-        docker push $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-assessment-backend:stable
-        docker tag unity-ai-assessment-frontend $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-assessment-frontend:stable
-        docker push $OC_REGISTRY/$OC_TARGET_PROJECT/unity-ai-assessment-frontend:stable
+        docker tag unity-ai-reporting $OC_REGISTRY/$OC_TARGET_PROJECT/uat-unity-ai-reporting:stable
+        docker push $OC_REGISTRY/$OC_TARGET_PROJECT/uat-unity-ai-reporting:stable
     - name: Disconnect docker from OpenShift container registry
       run: |
         docker logout

@@ -1,13 +1,12 @@
 # Unity AI - Reporting Platform
 
-AI-powered reporting system that converts natural language questions into SQL queries with Metabase visualization integration.
+AI-powered reporting system that converts natural language questions into SQL queries with Metabase integration.
 
 ## Quick Start
 
-1. **Clone and navigate:**
+1. **Navigate to applications directory:**
 ```bash
-git clone <repository-url>
-cd unity-ai/applications
+cd applications
 ```
 
 2. **Configure environment:**
@@ -18,41 +17,31 @@ cp .env.example .env
 
 3. **Start the application:**
 ```bash
-# Development
-docker-compose -f docker-compose.dev.yml up
-
-# Production
-docker-compose up -d
+docker-compose up --build
 ```
 
-## Services
-
-- **Frontend**: http://localhost:80 - Angular chat interface (container port 8080)
-- **Backend**: http://localhost:5000 - Flask API
-- **Database**: localhost:5432 - PostgreSQL with pgvector
-- **pgAdmin** (dev): http://localhost:8080 - Database admin
+4. **Access the application:**
+   - Application: http://localhost
 
 ## Architecture
 
-- **Backend**: Python Flask + Azure OpenAI + LangChain
-- **Frontend**: Angular 20 with BC Government styling
-- **Database**: PostgreSQL with pgvector for embeddings
-- **Authentication**: JWT with role-based access
+**Single Combined Container**: Flask serves both the Angular frontend (static files) and backend API endpoints.
 
-## Features
+```
+Browser (localhost:80) → Flask (container port 8080)
+                          ├── /api/* → Backend API
+                          └── /*     → Angular static files
+```
 
-- Natural language to SQL conversion
+## Key Features
+
+- Natural language to SQL conversion using Azure OpenAI
 - AI-powered query explanations
-- Chat history and conversation management
+- Chat history and conversation management  
 - Admin feedback dashboard
-- Multi-tenant support
-- Metabase card creation and visualization
-
-## Documentation
-
-- [Applications README](./applications/README.md) - Deployment and configuration
-- [Backend README](./applications/Unity.AI.Reporting.Backend/README.md) - API documentation
-- [Frontend README](./applications/Unity.AI.Reporting.Frontend/README.md) - UI components
+- Multi-tenant support with configurable database mappings
+- JWT authentication with role-based access
+- PostgreSQL with pgvector for schema embeddings
 
 ## Project Structure
 
@@ -61,12 +50,26 @@ unity-ai/
 ├── applications/
 │   ├── Unity.AI.Reporting.Backend/    # Flask API + AI SQL generation
 │   ├── Unity.AI.Reporting.Frontend/   # Angular chat interface
-│   ├── docker-compose.yml             # Production setup
-│   ├── docker-compose.dev.yml         # Development setup
-│   └── .env.example                   # Configuration template
+│   ├── Dockerfile                     # Combined frontend+backend build
+│   ├── docker-compose.yml             # Local development setup
+│   ├── .env.example                   # Configuration template
+│   └── README.md                      # Deployment guide
 ├── documentation/                      # Project documentation
-└── README.md                          # This file
+└── .github/workflows/                 # CI/CD pipelines
 ```
+
+## Documentation
+
+- [Applications README](./applications/README.md) - Detailed setup and deployment
+- [Environment Configuration](./applications/documentation/environment-specific-configuration.md) - Environment variables guide
+- [Manual Deployment Guide](./documentation/manual-image-build-push-openshift.md) - OpenShift deployment
+
+## Tech Stack
+
+- **Frontend**: Angular 20, Material UI, PrimeNG
+- **Backend**: Flask, Azure OpenAI, LangChain, PGVector  
+- **Database**: PostgreSQL 16 with pgvector extension
+- **Container**: Docker (multi-stage build, OpenShift compatible)
 
 ## License
 

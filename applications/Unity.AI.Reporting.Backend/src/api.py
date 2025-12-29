@@ -350,7 +350,7 @@ def ask():
             logger.info(f"Creating Metabase card with SQL length: {len(sql)}")
             try:
                 logger.debug("Calling metabase_client.create_card...")
-                card_id = metabase_client.create_card(
+                card_id, card_data = metabase_client.create_card(
                     sql, db_id, collection_id, metadata['title']
                 )
                 logger.info(f"Card created successfully with ID: {card_id}")
@@ -370,6 +370,7 @@ def ask():
             "title": metadata.get("title", "Untitled"),
             "visualization_options": metadata.get('visualization_options', []),
             "SQL": sql,
+            "data": data,
             "tokens": sql_tokens  # Include token usage from SQL generation
         }, 200
     

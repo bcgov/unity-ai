@@ -149,7 +149,6 @@ class MetabaseClient:
         }
 
         logger.debug(f"Metabase create_card - URL: {url}")
-        # Do NOT log header values or names to avoid leaking or signaling sensitive information
         logger.debug("Metabase create_card - Using Metabase authorization header")
         logger.debug(f"Metabase create_card - Payload keys: {list(payload.keys())}")
         logger.debug(f"Metabase create_card - SQL length: {len(sql)}")
@@ -193,6 +192,24 @@ class MetabaseClient:
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error enabling embedding: {e}", exc_info=True)
             raise requests.exceptions.ConnectionError(f"Connection error enabling embedding: {e}")
+        
+        headers = self._get_headers(tenant_id)
+        url = f"{self.config.url}/api/card/{card_id}/query"
+        payload = {
+            "ignore_cache": True
+        }
+
+        print("Trying to get query data")
+        try:
+            r = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=30  # Add timeout
+            )
+            print(r.json())
+        except Exception as e:
+            print(e)
         
         return card_id
     

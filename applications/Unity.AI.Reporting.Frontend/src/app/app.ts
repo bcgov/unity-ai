@@ -14,6 +14,8 @@ import { LoggerService } from './services/logger.service';
 import { IframeDetectorService } from './iframe-detector.service';
 import { SidebarComponent, Chat } from './sidebar/sidebar';
 import { environment } from '../environments/environment';
+import { normalizeCardData } from "./card-data";
+
 
 @Component({
   selector: 'app-root',
@@ -324,7 +326,7 @@ export class App implements OnInit, OnDestroy {
     // Always reset to table visualization for new questions
     this.selectedVisualization = 'table';
     
-    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: "", sql_explanation_visible: false} as Turn;
+    const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": "", "card_data": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: "", sql_explanation_visible: false} as Turn;
     this.conversation.push(turn);
     
     // Set the new turn as the current turn for navigation
@@ -335,9 +337,8 @@ export class App implements OnInit, OnDestroy {
     try {
       if (! await this.authService.isAuthenticated()) throw new Error('Not authenticated');
 
-      turn.embed = await firstValueFrom(
-        this.apiService.askQuestion<Embed>(turn.question, this.conversation)
-      );
+      const res = await firstValueFrom(this.apiService.askQuestion<any>(turn.question, this.conversation));
+      turn.embed = res as Embed;
       turn.embed.current_visualization = 'table';
       turn.iframeLoaded = true; // Mark as loaded since we're not using iframes anymore
       turn.safeUrl = null; // No iframe URL needed anymore
@@ -348,6 +349,18 @@ export class App implements OnInit, OnDestroy {
       turn.safeUrl = "failure";
       // Error is handled by setting failure state
     }
+  }
+
+  tableFor(turn: Turn) {
+    console.log("Turn:", turn)
+    return normalizeCardData(turn.embed.card_data);
+  }
+  displayedColumnsFor(turn: Turn): string[] {
+    return this.tableFor(turn)?.columns ?? [];
+  }
+
+  getCardData(turn: Turn) {
+    return turn.embed.card_data
   }
 
   retryQuestion(turn: Turn): void {
@@ -392,10 +405,10 @@ export class App implements OnInit, OnDestroy {
         this.apiService.getChat<{conversation: Turn[]}>(chatId)
       );
 
-      this.conversation = chatData.conversation.map(turn => ({
+      this.conversation = (chatData.conversation as Turn[]).map((turn) => ({
         ...turn,
-        iframeLoaded: true, // No iframe anymore, always mark as loaded
-        sql_explanation_visible: turn.sql_explanation_visible || false // Preserve visibility state or default to false
+        iframeLoaded: true,
+        sql_explanation_visible: turn.sql_explanation_visible ?? false,
       }));
       
       this.currentChatId = chatId;

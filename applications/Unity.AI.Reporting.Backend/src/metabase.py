@@ -119,7 +119,7 @@ class MetabaseClient:
         return r.json()
 
     def create_card(self, sql: str, db_id: int, collection_id: int,
-                    name: str, tenant_id: Optional[str] = None) -> int:
+                    name: str, tenant_id: Optional[str] = None) -> List[int | str]:
         """
         Create a new Metabase card (saved question).
 
@@ -207,11 +207,12 @@ class MetabaseClient:
                 json=payload,
                 timeout=30  # Add timeout
             )
-            print(r.json())
+            card_data = r.json()
+            print(card_data)
         except Exception as e:
             print(e)
         
-        return card_id
+        return card_id, card_data
     
     def update_card_visualization(self, card_id: int, display_mode: str,
                                  x_fields: List[str], y_fields: List[str],

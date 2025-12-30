@@ -5,6 +5,7 @@ export interface Embed {
     title: string;
     visualization_options: string[]; // Array to hold different visualization options
     SQL: string;
+    card_data: string;
     current_visualization?: string; // Current visualization type being displayed
     sql_explanation?: string; // Explanation of the generated SQL
     tokens?: {

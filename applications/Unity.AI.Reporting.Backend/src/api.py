@@ -370,7 +370,7 @@ def ask():
             "title": metadata.get("title", "Untitled"),
             "visualization_options": metadata.get('visualization_options', []),
             "SQL": sql,
-            "data": data,
+            "card_data": card_data,
             "tokens": sql_tokens  # Include token usage from SQL generation
         }, 200
     

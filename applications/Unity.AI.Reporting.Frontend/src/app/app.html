@@ -76,7 +76,16 @@
                 </button> -->
                 <div *ngIf="tableFor(turn) as t">
                   <!-- table or chart here -->
-                  <div class="table-wrap">
+                   <table mat-table [dataSource]="t.objects">
+                    <ng-container *ngFor="let col of t.columns" [matColumnDef]="col">
+                      <th mat-header-cell *matHeaderCellDef>{{ col }}</th>
+                      <td mat-cell *matCellDef="let row">{{ row[col] }}</td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="t.columns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: t.columns"></tr>
+                  </table>
+                  <!-- <div class="table-wrap">
                     <table>
                       <thead>
                         <tr>
@@ -89,7 +98,7 @@
                         </tr>
                       </tbody>
                     </table>
-                  </div>
+                  </div> -->
                 </div>
               </div>
 

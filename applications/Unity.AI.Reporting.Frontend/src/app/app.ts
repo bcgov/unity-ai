@@ -15,11 +15,12 @@ import { IframeDetectorService } from './iframe-detector.service';
 import { SidebarComponent, Chat } from './sidebar/sidebar';
 import { environment } from '../environments/environment';
 import { normalizeCardData } from "./card-data";
+import { MatTableModule } from '@angular/material/table';
 
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent],
+  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })

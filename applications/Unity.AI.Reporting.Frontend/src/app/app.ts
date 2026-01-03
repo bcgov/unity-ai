@@ -16,11 +16,12 @@ import { SidebarComponent, Chat } from './sidebar/sidebar';
 import { environment } from '../environments/environment';
 import { normalizeCardData } from "./card-data";
 import { MatTableModule } from '@angular/material/table';
+import { ChartComponent } from './chart/chart.component';
 
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule],
+  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule, ChartComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -301,16 +302,12 @@ export class App implements OnInit, OnDestroy {
   }
 
   async changeDisplay(turn: Turn, mode: string) {
-    try {
-      const res = await firstValueFrom(
-        this.apiService.changeDisplay<Embed>(turn.embed.card_id, mode, turn.embed.x_field, turn.embed.y_field)
-      );
-      // Update the current visualization in the embed
-      turn.embed.current_visualization = mode;
-      // turn.embed = res;
-    } catch (error) {
-      // Handle error silently
-    }
+    // Since we're building our own visualization (not using Metabase embedding),
+    // we only need to update the frontend state
+    turn.embed.current_visualization = mode;
+
+    // Force Angular to detect the change by creating a new array reference
+    this.conversation = [...this.conversation];
   }
 
   async resetConversation() {

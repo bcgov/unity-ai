@@ -19,8 +19,8 @@
     "@angular/platform-browser": "^20.0.0",
     "@angular/router": "^20.0.0",
     "@bcgov/bc-sans": "^2.1.0",
-    "echarts": "^6.0.0",
-    "ngx-echarts": "^20.0.2",
+    "chart.js": "^4.4.0",
+    "ng2-charts": "^6.0.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"

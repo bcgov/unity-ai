@@ -76,27 +76,32 @@
                 </button> -->
                 <div *ngIf="tableFor(turn) as t">
                   <!-- Show table when selectedVisualization is 'table' or when viewing a different turn -->
-                  <table mat-table [dataSource]="t.objects"
-                         *ngIf="turn.embed.current_visualization === 'table' || !turn.embed.current_visualization">
-                    <ng-container *ngFor="let col of t.columns" [matColumnDef]="col">
-                      <th mat-header-cell *matHeaderCellDef>{{ col }}</th>
-                      <td mat-cell *matCellDef="let row">{{ row[col] }}</td>
-                    </ng-container>
+                  <div *ngIf="turn.embed.current_visualization === 'table' || !turn.embed.current_visualization" class="table-wrapper">
+                    <h3 class="table-title">{{ turn.embed.title }}</h3>
+                    <div>
+                      <table mat-table [dataSource]="t.objects">
+                        <ng-container *ngFor="let col of t.columns" [matColumnDef]="col">
+                          <th mat-header-cell *matHeaderCellDef>{{ col }}</th>
+                          <td mat-cell *matCellDef="let row">{{ row[col] }}</td>
+                        </ng-container>
 
-                    <tr mat-header-row *matHeaderRowDef="t.columns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: t.columns"></tr>
-                  </table>
+                        <tr mat-header-row *matHeaderRowDef="t.columns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: t.columns"></tr>
+                      </table>
+                    </div>
+                  </div>
 
                   <!-- Show chart when selectedVisualization is bar, line, or pie -->
                   <app-chart *ngIf="turn.embed.current_visualization && turn.embed.current_visualization !== 'table' && turn.embed.current_visualization !== 'map' && (turn.embed.current_visualization === 'bar' || turn.embed.current_visualization === 'line' || turn.embed.current_visualization === 'pie')"
                              [data]="t"
-                             [type]="turn.embed.current_visualization">
+                             [type]="turn.embed.current_visualization"
+                             [title]="turn.embed.title">
                   </app-chart>
 
-                  <!-- Map placeholder (not implemented yet) -->
+                  <!-- Map visualization not available message -->
                   <div *ngIf="turn.embed.current_visualization === 'map'" class="map-placeholder">
-                    <p>Map visualization is not yet implemented</p>
-                    <p>Please use the table view or switch to another chart type</p>
+                    <p>Map visualization is not available</p>
+                    <p>Please select a different visualization type from the dropdown</p>
                   </div>
                 </div>
               </div>

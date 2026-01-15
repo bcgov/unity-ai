@@ -13,11 +13,14 @@ export interface ChartDataInput {
   standalone: true,
   imports: [CommonModule, BaseChartDirective],
   template: `
-    <div class="chart-container">
-      <canvas baseChart
-              [data]="chartData"
-              [options]="chartOptions"
-              [type]="chartType"></canvas>
+    <div class="chart-wrapper">
+      <h3 class="chart-title" *ngIf="title">{{ title }}</h3>
+      <div class="chart-container">
+        <canvas baseChart
+                [data]="chartData"
+                [options]="chartOptions"
+                [type]="chartType"></canvas>
+      </div>
     </div>
   `,
   styles: [`
@@ -28,20 +31,36 @@ export interface ChartDataInput {
       box-sizing: border-box;
     }
 
+    .chart-wrapper {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .chart-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      text-align: center;
+    }
+
     .chart-container {
       width: 100%;
-      height: 400px;
+      height: 300px;
       position: relative;
     }
 
     canvas {
-      max-height: 400px !important;
+      max-height: 300px !important;
     }
   `]
 })
 export class ChartComponent implements OnInit, OnChanges {
   @Input() data!: ChartDataInput;
   @Input() type: 'bar' | 'line' | 'pie' = 'bar';
+  @Input() title?: string;
   @ViewChild(BaseChartDirective) chart?: BaseChartDirective;
 
   chartType: ChartType = 'bar';
@@ -226,10 +245,26 @@ export class ChartComponent implements OnInit, OnChanges {
     this.chartOptions = {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          left: 10,
+          right: 10,
+          top: 10,
+          bottom: 10
+        }
+      },
       plugins: {
         legend: {
           display: true,
-          position: 'left',
+          position: 'right',
+          align: 'center',
+          labels: {
+            padding: 10,
+            boxWidth: 15,
+            font: {
+              size: 12
+            }
+          }
         },
         tooltip: {
           callbacks: {

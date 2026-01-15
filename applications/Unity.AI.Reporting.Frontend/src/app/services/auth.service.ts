@@ -26,6 +26,7 @@ export class AuthService {
   ) {
     this.initializeFromUrl();
     this.initializePostMessageListener();
+    this.sendReadyMessageToParent();
   }
 
   private initializeFromUrl(): void {
@@ -60,18 +61,31 @@ export class AuthService {
     });
   }
 
+  private sendReadyMessageToParent(): void {
+    // Only send READY message if we're in an iframe
+    if (window.self !== window.top && window.parent) {
+      try {
+        // Send READY message to parent to request authentication token
+        window.parent.postMessage({ type: 'READY' }, '*');
+        this.logger.info('Sent READY message to parent window');
+      } catch (error) {
+        this.logger.error('Failed to send READY message to parent:', error);
+      }
+    }
+  }
+
   setToken(token: string): void {
     this.tokenSubject.next(token);
-    localStorage.setItem('jwt_token', token);
+    localStorage.setItem('ai_reporting', token);
   }
 
   getToken(): string | null {
-    return this.tokenSubject.value || localStorage.getItem('jwt_token');
+    return this.tokenSubject.value || localStorage.getItem('ai_reporting');
   }
 
   clearToken(): void {
     this.tokenSubject.next(null);
-    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('ai_reporting');
   }
 
   async isAuthenticated(): Promise<boolean> {

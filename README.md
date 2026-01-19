@@ -1,6 +1,9 @@
-# Unity AI - Reporting Platform
+# Unity AI - Platform
 
-AI-powered reporting system that converts natural language questions into SQL queries with Metabase integration.
+AI-powered  
+
+- Reporting system that converts natural language questions into SQL queries with Metabase integration.
+- Application assessment system allowing for autonomous background application review and scoring.
 
 ## Quick Start
 
@@ -22,6 +25,7 @@ docker-compose up --build
 
 4. **Access the application:**
    - Application: http://localhost
+   - Testing with JWT: http://localhost/?token=YOUR_JWT_TOKEN
 
 ## Architecture
 
@@ -35,13 +39,13 @@ Browser (localhost:80) → Flask (container port 8080)
 
 ## Key Features
 
-- Natural language to SQL conversion using Azure OpenAI
-- AI-powered query explanations
-- Chat history and conversation management  
-- Admin feedback dashboard
-- Multi-tenant support with configurable database mappings
-- JWT authentication with role-based access
-- PostgreSQL with pgvector for schema embeddings
+- **AI Query Generation**: Natural language to SQL conversion using Azure OpenAI
+- **Smart Authentication**: JWT with hybrid local/production modes (URL tokens for localhost, PostMessage for production)
+- **Origin Security**: ORIGIN_URL environment variable for iframe origin validation
+- **Chat Management**: Conversation history and AI-powered SQL explanations
+- **Admin Dashboard**: Feedback collection and administrative controls
+- **Multi-tenant**: Configurable database mappings and tenant isolation
+- **Vector Search**: PostgreSQL with pgvector for intelligent schema embeddings
 
 ## Project Structure
 

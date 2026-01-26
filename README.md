@@ -65,7 +65,7 @@ unity-ai/
 ## Documentation
 
 - [Applications README](./applications/README.md) - Detailed setup and deployment
-- [Environment Configuration](./applications/documentation/environment-specific-configuration.md) - Environment variables guide
+- [Environment Configuration](./documentation/unity-ai-reporting-environment-specific-configuration.md) - Environment variables guide
 - [Manual Deployment Guide](./documentation/manual-image-build-push-openshift.md) - OpenShift deployment
 
 ## Tech Stack

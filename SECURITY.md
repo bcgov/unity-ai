@@ -15,4 +15,4 @@ This document outlines security procedures for the Economy Sector Reporting AI p
 
 ## Reporting a Security Bug
 
-The project team and the BC Governement developer community take all security bugs seriously. Reporting security issues is always helpful this can be done by sending an email to <grantmanagementsupport@gov.bc.ca> or following the links on the portal landing page.
+The project team and the BC Government developer community take all security bugs seriously. Reporting security issues is always helpful this can be done by sending an email to <grantmanagementsupport@gov.bc.ca> or following the links on the portal landing page.

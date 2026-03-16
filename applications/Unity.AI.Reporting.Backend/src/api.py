@@ -399,23 +399,18 @@ def ask():
         logger.info("About to create Metabase card...")
         logger.debug(f"Metabase client type: {type(metabase_client)}")
 
-            # Create Metabase card
-            logger.info(f"Creating Metabase card with SQL length: {len(sql)}")
-            try:
-                logger.debug("Calling metabase_client.create_card...")
-                card_id = metabase_client.create_card(
-                    sql, db_id, collection_id, metadata['title']
-                )
-                logger.info(f"Card created successfully with ID: {card_id}")
-            except Exception as card_error:
-                logger.error(f"Error during card creation: {card_error}", exc_info=True)
-                logger.debug(f"Card error type: {type(card_error)}")
-                raise card_error
+        # Create Metabase card
+        logger.info(f"Creating Metabase card with SQL length: {len(sql)}")
+        try:
+            logger.debug("Calling metabase_client.create_card...")
+            card_id, card_data = metabase_client.create_card(
+                sql, db_id, collection_id, metadata['title']
+            )
+            logger.info(f"Card created successfully with ID: {card_id}")
+        except Exception as card_error:
+            logger.error(f"Error during card creation: {card_error}", exc_info=True)
+            raise card_error
 
-        except Exception as step_error:
-            logger.error(f"Error in specific step: {step_error}", exc_info=True)
-            raise step_error
-        
         return {
             "card_id": card_id,
             "x_field": metadata.get('x_axis', []),
@@ -424,7 +419,7 @@ def ask():
             "visualization_options": metadata.get('visualization_options', []),
             "SQL": sql,
             "card_data": card_data,
-            "tokens": sql_tokens  # Include token usage from SQL generation
+            "tokens": sql_tokens
         }, 200
     
     try:

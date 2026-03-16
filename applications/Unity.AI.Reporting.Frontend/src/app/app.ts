@@ -1,6 +1,7 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
+import { NgFor } from '@angular/common';
 import { SafeResourceUrl } from '@angular/platform-browser';
 
 import { Embed } from './embed';
@@ -22,7 +23,7 @@ import { ChartComponent } from './chart/chart.component';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule, ChartComponent],
+  imports: [FormsModule, NgFor, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule, ChartComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })

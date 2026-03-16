@@ -34,10 +34,11 @@
             </div>
           </div>
         </div>
-      }
+      </div>
+    }
 
-      <!-- Chat conversation -->
-      @if (conversation.length > 0) {
+    <!-- Chat conversation -->
+    @if (conversation.length > 0) {
         <div class="chat-container">
           <div class="turns" #turnsContainer>
             @for (turn of conversation; track turn) {
@@ -98,6 +99,11 @@
                               <p>Please select a different visualization type from the dropdown</p>
                             </div>
                           }
+                        } @else {
+                          <div class="table-wrapper">
+                            <h3 class="table-title">{{ turn.embed.title }}</h3>
+                            <p style="color: #888; padding: 1rem;">No data available to display.</p>
+                          </div>
                         }
                       </div>
                       @if (turn.sqlPanelOpen) {

@@ -191,13 +191,23 @@ class MetabaseClient:
         payload = {"ignore_cache": True}
 
         try:
-            r = requests.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
+            r = requests.post(url, headers=headers, json=payload, timeout=30)
             card_data = r.json()
+
+            # Poll if query is still running (async Metabase query)
+            if r.status_code == 202 and card_data.get("status") == "running":
+                job_id = card_data.get("id")
+                deadline = time.time() + 30
+                while time.time() < deadline:
+                    jr = requests.get(
+                        f"{self.config.url}/api/async/{job_id}",
+                        headers=headers,
+                        timeout=10
+                    )
+                    if jr.status_code == 200:
+                        card_data = jr.json()
+                        break
+                    time.sleep(1)
         except Exception as e:
             logger.error(f"Error fetching card data: {e}", exc_info=True)
             card_data = None

@@ -119,7 +119,8 @@ class MetabaseClient:
         return r.json()
 
     def create_card(self, sql: str, db_id: int, collection_id: int,
-                    name: str, tenant_id: Optional[str] = None) -> List[int | str]:
+                    name: str, tenant_id: Optional[str] = None,
+                    visualization_settings: Optional[Dict[str, Any]] = None) -> tuple:
         """
         Create a new Metabase card (saved question).
 
@@ -137,7 +138,7 @@ class MetabaseClient:
         url = f"{self.config.url}/api/card"
         payload = {
             "name": name,
-            "visualization_settings": {},
+            "visualization_settings": visualization_settings or {},
             "collection_id": collection_id,
             "enable_embedding": True,
             "dataset_query": {
@@ -175,7 +176,7 @@ class MetabaseClient:
 
         if r.status_code != 200:
             logger.error(f"Metabase API error - Status: {r.status_code}, Response: {r.text}")
-            raise Exception(f"HTTP {r.status_code}: {r.text}")
+            raise requests.exceptions.HTTPError(f"HTTP {r.status_code}: {r.text}", response=r)
 
         try:
             response_json = r.json()
@@ -186,32 +187,21 @@ class MetabaseClient:
             logger.error(f"Response text: {r.text}")
             raise ValueError(f"Error parsing Metabase response: {e}")
 
-        except requests.exceptions.Timeout:
-            logger.error("Metabase embedding enable request timed out")
-            raise requests.exceptions.Timeout("Metabase embedding enable request timed out")
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error enabling embedding: {e}", exc_info=True)
-            raise requests.exceptions.ConnectionError(f"Connection error enabling embedding: {e}")
-        
-        headers = self._get_headers(tenant_id)
         url = f"{self.config.url}/api/card/{card_id}/query"
-        payload = {
-            "ignore_cache": True
-        }
+        payload = {"ignore_cache": True}
 
-        print("Trying to get query data")
         try:
             r = requests.post(
                 url,
                 headers=headers,
                 json=payload,
-                timeout=30  # Add timeout
+                timeout=30
             )
             card_data = r.json()
-            print(card_data)
         except Exception as e:
-            print(e)
-        
+            logger.error(f"Error fetching card data: {e}", exc_info=True)
+            card_data = None
+
         return card_id, card_data
     
     def update_card_visualization(self, card_id: int, display_mode: str,
@@ -228,7 +218,7 @@ class MetabaseClient:
             tenant_id: Optional tenant ID to use tenant-specific API key
         """
         headers = self._get_headers(tenant_id)
-        visualization_settings = {
+        visualization_settings: Dict[str, Any] = {
             "graph.dimensions": x_fields,
             "graph.metrics": y_fields,
         }
@@ -252,7 +242,7 @@ class MetabaseClient:
         )
 
         if r.status_code != 200:
-            raise Exception(f"HTTP {r.status_code}: {r.text}")
+            raise requests.exceptions.HTTPError(f"HTTP {r.status_code}: {r.text}", response=r)
 
     def delete_card(self, card_id: int, tenant_id: Optional[str] = None) -> bool:
         """Delete a Metabase card"""
@@ -272,7 +262,7 @@ class MetabaseClient:
                 headers=headers
             )
             if r.status_code != 200:
-                raise Exception(f"HTTP {r.status_code}: {r.text}")
+                raise requests.exceptions.HTTPError(f"HTTP {r.status_code}: {r.text}", response=r)
 
             cards = r.json()
             return [card["id"] for card in cards]

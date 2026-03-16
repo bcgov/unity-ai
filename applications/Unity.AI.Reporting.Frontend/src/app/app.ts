@@ -1,8 +1,8 @@
-import { Component, ViewChild, ElementRef, NgZone, OnInit, OnDestroy } from '@angular/core';
+import { Component, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { CommonModule } from '@angular/common';
+import { SafeResourceUrl } from '@angular/platform-browser';
+
 import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlExplanationComponent } from './sql-explanation/sql-explanation';
@@ -12,6 +12,7 @@ import { ApiService } from './services/api.service';
 import { ToastService } from './services/toast.service';
 import { LoggerService } from './services/logger.service';
 import { IframeDetectorService } from './iframe-detector.service';
+import { ConfigService } from './services/config.service';
 import { SidebarComponent, Chat } from './sidebar/sidebar';
 import { environment } from '../environments/environment';
 import { normalizeCardData } from "./card-data";
@@ -21,12 +22,12 @@ import { ChartComponent } from './chart/chart.component';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule, ChartComponent],
+  imports: [FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, MatTableModule, ChartComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
 export class App implements OnInit, OnDestroy {
-  protected title = 'recap';
+  protected title = 'AI Reporting';
   protected api_url = environment.apiUrl;
   question: string = "";
   conversation: Turn[] = [];
@@ -41,17 +42,25 @@ export class App implements OnInit, OnDestroy {
     private readonly apiService: ApiService,
     private readonly toastService: ToastService,
     private readonly logger: LoggerService,
-    private readonly iframeDetector: IframeDetectorService
+    private readonly iframeDetector: IframeDetectorService,
+    private readonly configService: ConfigService,
+    private readonly cdr: ChangeDetectorRef
   ) {}
 
-  @ViewChild('turnsContainer') private turnsContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('sidebar') private sidebar!: SidebarComponent;
+  @ViewChild('turnsContainer') private readonly turnsContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sqlAnimationContainer') private readonly sqlAnimationContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sidebar') private readonly sidebar!: SidebarComponent;
 
-  async ngOnInit(): Promise<void> {
+  ngOnInit(): void {
+    this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    console.log('🔧 APP COMPONENT: Initialized (postMessage handling done by AuthService)');
+
     // Add iframe-specific styling
     this.iframeDetector.addIframeClass();
-    
+
     // Check if running in iframe and authenticated
     if (this.iframeDetector.isInIframe()) {
       const isAuthenticated = await this.authService.isAuthenticated();
@@ -64,7 +73,7 @@ export class App implements OnInit, OnDestroy {
 
     // Add window resize listener to maintain scroll position
     window.addEventListener('resize', this.resizeListener);
-    
+
     // Add click listener to close dropdown when clicking outside
     document.addEventListener('click', this.handleDocumentClick);
   }
@@ -80,8 +89,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   private resizeTimeout: any;
-  private resizeListener = () => this.onWindowResize();
-  private handleDocumentClick = (event: Event) => this.onDocumentClick(event);
+  private readonly resizeListener = () => this.onWindowResize();
+  private readonly handleDocumentClick = (event: Event) => this.onDocumentClick(event);
 
   private onDocumentClick(event: Event): void {
     const target = event.target as HTMLElement;
@@ -90,6 +99,7 @@ export class App implements OnInit, OnDestroy {
     // If click is outside the dropdown, close it
     if (!dropdownElement && this.visualizationDropdownOpen) {
       this.visualizationDropdownOpen = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -172,6 +182,7 @@ export class App implements OnInit, OnDestroy {
 
     // Save the chat to persist the visibility state
     await this.saveChat();
+    this.cdr.markForCheck();
   }
 
   async redirectToMB(turn: Turn): Promise<Window | null> {
@@ -293,11 +304,13 @@ export class App implements OnInit, OnDestroy {
       
       // Show success toast for individual question deletion
       this.toastService.success('Question deleted successfully');
-      
+
     } catch (error) {
       // Show error toast
       this.logger.error('Error deleting question:', error);
       this.toastService.error('Failed to delete question. Please try again.');
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -343,9 +356,11 @@ export class App implements OnInit, OnDestroy {
 
       await this.saveChat();
     } catch (error) {
+      console.error('Failed to process question:', error);
       turn.iframeLoaded = true;
       turn.safeUrl = "failure";
-      // Error is handled by setting failure state
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -418,7 +433,15 @@ export class App implements OnInit, OnDestroy {
       // Scroll to bottom instantly after loading chat
       this.scrollToBottomInstant();
     } catch (error) {
-      // Handle error silently
+      // Log the error and provide non-intrusive user feedback
+      if (this.logger && typeof this.logger.error === 'function') {
+        this.logger.error('Failed to load chat', error);
+      }
+      if (this.toastService && typeof (this.toastService as any).showError === 'function') {
+        (this.toastService as any).showError('Failed to load chat. Please try again.');
+      }
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -451,7 +474,9 @@ export class App implements OnInit, OnDestroy {
         this.sidebar.loadChats();
       }
     } catch (error) {
-      // Handle error silently
+      // Log the error and provide user feedback instead of handling it silently
+      this.logger.error('Failed to save chat', error);
+      this.toastService.error('Failed to save chat. Please try again.');
     }
   }
 
@@ -508,7 +533,7 @@ export class App implements OnInit, OnDestroy {
     // If we have a current turn, apply the visualization change immediately
     if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
       const currentTurn = this.conversation[this.currentTurnIndex];
-      if (currentTurn.embed && currentTurn.embed.card_id) {
+      if (currentTurn.embed?.card_id) {
         await this.changeDisplay(currentTurn, type);
         // Save the chat to persist the visualization change
         await this.saveChat();

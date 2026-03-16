@@ -4,9 +4,13 @@ Authentication module for JWT token validation and user management.
 import os
 import jwt
 import logging
+import warnings
+
+# Suppress PyJWT's InsecureKeyLengthWarning - key length is enforced at deployment (64+ chars required)
+warnings.filterwarnings("ignore", message=".*key.*length.*", category=UserWarning)
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from flask import request, jsonify
+from flask import abort, g, request, jsonify
 from typing import Optional, Dict, Any, Callable
 
 # Configure logging
@@ -135,7 +139,7 @@ def require_auth(f: Callable) -> Callable:
                     'error': 'Authentication required',
                     'message': 'Valid JWT token must be provided in Authorization header'
                 }), 401
-            
+
             # Validate required fields in token
             required_fields = ['user_id', 'tenant']
             missing_fields = [field for field in required_fields if field not in user_data]
@@ -145,9 +149,9 @@ def require_auth(f: Callable) -> Callable:
                     'error': 'Invalid token',
                     'message': f'Token missing required fields: {", ".join(missing_fields)}'
                 }), 401
-            
+
             # Make user data available to the route
-            request.current_user = user_data
+            g.current_user = user_data
             return f(*args, **kwargs)
 
         except Exception as e:
@@ -163,31 +167,35 @@ def require_auth(f: Callable) -> Callable:
 def optional_auth(f: Callable) -> Callable:
     """
     Decorator for routes where authentication is optional
-    Sets request.current_user to None if no valid token provided
+    Sets g.current_user to None if no valid token provided
     
     Usage:
         @app.route('/maybe-protected')
         @optional_auth
         def maybe_protected_route():
-            if request.current_user:
-                return jsonify({'message': f'Hello {request.current_user["user_id"]}'})
+            if g.current_user:
+                return jsonify({'message': f'Hello {g.current_user["user_id"]}'})
             else:
                 return jsonify({'message': 'Hello anonymous user'})
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         user_data = auth_manager.get_current_user()
-        request.current_user = user_data
+        g.current_user = user_data
         return f(*args, **kwargs)
     
     return decorated_function
 
 
-def get_user_from_token() -> Optional[Dict[str, Any]]:
+def get_user_from_token() -> Dict[str, Any]:
     """
-    Helper function to get current user data from request
-    
+    Helper function to get current user data from request.
+    Must be called from endpoints decorated with @require_auth.
+
     Returns:
-        User data dict if authenticated, None otherwise
+        User data dict from the authenticated token
     """
-    return getattr(request, 'current_user', None)
+    user_data = getattr(g, 'current_user', None)
+    if not user_data:
+        abort(401, description="User data not found in token")
+    return user_data

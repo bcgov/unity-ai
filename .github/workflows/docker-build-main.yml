@@ -61,7 +61,7 @@ jobs:
     environment: main
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
           fetch-depth: '1'
     - name: Get short commitId
@@ -91,7 +91,7 @@ jobs:
       contents: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
           fetch-depth: '1'
     - name: Generate Next Git Tag
@@ -144,7 +144,7 @@ jobs:
       actions: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
           fetch-depth: '1'
     - name: Set repository version variables
@@ -167,7 +167,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: main
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Build Docker images
       run: |
         echo "buildArgs UNITY_AI_BUILD_VERSION: ${{env.UNITY_AI_BUILD_VERSION}}, UNITY_AI_BUILD_REVISION: ${{env.UNITY_AI_BUILD_REVISION}}"

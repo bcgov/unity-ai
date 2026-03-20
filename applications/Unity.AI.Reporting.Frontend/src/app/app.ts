@@ -1,8 +1,8 @@
-import { Component, ViewChild, ElementRef, NgZone, OnInit, OnDestroy } from '@angular/core';
+import { Component, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { CommonModule } from '@angular/common';
+import { SafeResourceUrl, DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
 import { Embed } from './embed';
 import { Turn } from './turn';
 import { SqlExplanationComponent } from './sql-explanation/sql-explanation';
@@ -18,7 +18,7 @@ import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent],
+  imports: [FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -39,19 +39,25 @@ export class App implements OnInit, OnDestroy {
     private readonly toastService: ToastService,
     private readonly logger: LoggerService,
     private readonly iframeDetector: IframeDetectorService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly cdr: ChangeDetectorRef,
+    private readonly sanitizer: DomSanitizer
   ) {}
 
-  @ViewChild('turnsContainer') private turnsContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('sqlAnimationContainer') private sqlAnimationContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('sidebar') private sidebar!: SidebarComponent;
+  @ViewChild('turnsContainer') private readonly turnsContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sqlAnimationContainer') private readonly sqlAnimationContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sidebar') private readonly sidebar!: SidebarComponent;
 
-  async ngOnInit(): Promise<void> {
+  ngOnInit(): void {
+    this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
     console.log('🔧 APP COMPONENT: Initialized (postMessage handling done by AuthService)');
-    
+
     // Add iframe-specific styling
     this.iframeDetector.addIframeClass();
-    
+
     // Check if running in iframe and authenticated
     if (this.iframeDetector.isInIframe()) {
       const isAuthenticated = await this.authService.isAuthenticated();
@@ -64,7 +70,7 @@ export class App implements OnInit, OnDestroy {
 
     // Add window resize listener to maintain scroll position
     window.addEventListener('resize', this.resizeListener);
-    
+
     // Add click listener to close dropdown when clicking outside
     document.addEventListener('click', this.handleDocumentClick);
   }
@@ -80,8 +86,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   private resizeTimeout: any;
-  private resizeListener = () => this.onWindowResize();
-  private handleDocumentClick = (event: Event) => this.onDocumentClick(event);
+  private readonly resizeListener = () => this.onWindowResize();
+  private readonly handleDocumentClick = (event: Event) => this.onDocumentClick(event);
 
   private onDocumentClick(event: Event): void {
     const target = event.target as HTMLElement;
@@ -90,6 +96,7 @@ export class App implements OnInit, OnDestroy {
     // If click is outside the dropdown, close it
     if (!dropdownElement && this.visualizationDropdownOpen) {
       this.visualizationDropdownOpen = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -172,6 +179,7 @@ export class App implements OnInit, OnDestroy {
 
     // Save the chat to persist the visibility state
     await this.saveChat();
+    this.cdr.markForCheck();
   }
 
   async redirectToMB(turn: Turn): Promise<Window | null> {
@@ -293,24 +301,29 @@ export class App implements OnInit, OnDestroy {
       
       // Show success toast for individual question deletion
       this.toastService.success('Question deleted successfully');
-      
+
     } catch (error) {
       // Show error toast
       this.logger.error('Error deleting question:', error);
       this.toastService.error('Failed to delete question. Please try again.');
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
   async changeDisplay(turn: Turn, mode: string) {
     try {
-      const res = await firstValueFrom(
+      await firstValueFrom(
         this.apiService.changeDisplay<Embed>(turn.embed.card_id, mode, turn.embed.x_field, turn.embed.y_field)
       );
       // Update the current visualization in the embed
       turn.embed.current_visualization = mode;
-      // turn.embed = res;
     } catch (error) {
-      // Handle error silently
+      // Log the error and notify the user
+      this.logger.error('Error changing display mode:', error);
+      this.toastService.error('Failed to change display mode. Please try again.');
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -348,9 +361,11 @@ export class App implements OnInit, OnDestroy {
 
       await this.saveChat();
     } catch (error) {
+      console.error('Failed to process question:', error);
       turn.iframeLoaded = true;
       turn.safeUrl = "failure";
-      // Error is handled by setting failure state
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -399,7 +414,7 @@ export class App implements OnInit, OnDestroy {
       this.conversation = chatData.conversation.map(turn => ({
         ...turn,
         iframeLoaded: true, // No iframe anymore, always mark as loaded
-        sql_explanation_visible: turn.sql_explanation_visible || false // Preserve visibility state or default to false
+        sql_explanation_visible: turn.sql_explanation_visible ?? false // Preserve visibility state or default to false
       }));
       
       this.currentChatId = chatId;
@@ -411,7 +426,15 @@ export class App implements OnInit, OnDestroy {
       // Scroll to bottom instantly after loading chat
       this.scrollToBottomInstant();
     } catch (error) {
-      // Handle error silently
+      // Log the error and provide non-intrusive user feedback
+      if (this.logger && typeof this.logger.error === 'function') {
+        this.logger.error('Failed to load chat', error);
+      }
+      if (this.toastService && typeof (this.toastService as any).showError === 'function') {
+        (this.toastService as any).showError('Failed to load chat. Please try again.');
+      }
+    } finally {
+      this.cdr.markForCheck();
     }
   }
 
@@ -444,7 +467,9 @@ export class App implements OnInit, OnDestroy {
         this.sidebar.loadChats();
       }
     } catch (error) {
-      // Handle error silently
+      // Log the error and provide user feedback instead of handling it silently
+      this.logger.error('Failed to save chat', error);
+      this.toastService.error('Failed to save chat. Please try again.');
     }
   }
 
@@ -501,7 +526,7 @@ export class App implements OnInit, OnDestroy {
     // If we have a current turn, apply the visualization change immediately
     if (this.conversation.length > 0 && this.currentTurnIndex >= 0 && this.currentTurnIndex < this.conversation.length) {
       const currentTurn = this.conversation[this.currentTurnIndex];
-      if (currentTurn.embed && currentTurn.embed.card_id) {
+      if (currentTurn.embed?.card_id) {
         await this.changeDisplay(currentTurn, type);
         // Save the chat to persist the visualization change
         await this.saveChat();
@@ -567,6 +592,111 @@ export class App implements OnInit, OnDestroy {
       // No conversation or invalid turn index
       this.selectedVisualization = 'table';
     }
+  }
+
+  highlightSql(sql: string): SafeHtml {
+    if (!sql) return this.sanitizer.bypassSecurityTrustHtml('');
+
+    const KEYWORDS = new Set([
+      'SELECT','FROM','WHERE','JOIN','LEFT','RIGHT','INNER','OUTER','FULL','ON',
+      'GROUP','BY','ORDER','HAVING','LIMIT','OFFSET','INSERT','UPDATE','DELETE',
+      'CREATE','DROP','ALTER','WITH','AS','AND','OR','NOT','IN','LIKE','ILIKE',
+      'BETWEEN','IS','NULL','DISTINCT','UNION','ALL','CASE','WHEN','THEN','ELSE',
+      'END','EXISTS','SET','INTO','VALUES','TABLE','INDEX','VIEW','PRIMARY','FOREIGN',
+      'KEY','REFERENCES','CONSTRAINT','UNIQUE','DEFAULT','RETURNING','OVER',
+      'PARTITION','ROW','ROWS','RANGE','PRECEDING','FOLLOWING','UNBOUNDED','CURRENT',
+      'CROSS','NATURAL','USING','EXCEPT','INTERSECT','RECURSIVE','LATERAL','FILTER',
+      'WITHIN','FETCH','NEXT','FIRST','ONLY','TRUE','FALSE','NULLS','LAST','TIES'
+    ]);
+    const FUNCTIONS = new Set([
+      'COUNT','SUM','AVG','MIN','MAX','COALESCE','NULLIF','CAST','CONVERT','CONCAT',
+      'SUBSTRING','SUBSTR','UPPER','LOWER','TRIM','LTRIM','RTRIM','LENGTH',
+      'CHAR_LENGTH','DATE','YEAR','MONTH','DAY','NOW','CURRENT_DATE',
+      'CURRENT_TIMESTAMP','EXTRACT','TO_DATE','TO_CHAR','TO_NUMBER','ROUND','FLOOR',
+      'CEIL','CEILING','ABS','MOD','POWER','SQRT','ISNULL','IFNULL','NVL','REPLACE',
+      'SPLIT_PART','POSITION','STRPOS','ARRAY_AGG','STRING_AGG','LISTAGG','JSON_AGG',
+      'RANK','DENSE_RANK','ROW_NUMBER','LEAD','LAG','FIRST_VALUE','LAST_VALUE',
+      'NTILE','PERCENT_RANK','CUME_DIST','GENERATE_SERIES','UNNEST','DATE_TRUNC',
+      'DATE_PART','AGE','DATEDIFF','DATEADD','GETDATE','GREATEST','LEAST',
+      'REGEXP_REPLACE','REGEXP_MATCH','IIF','DECODE'
+    ]);
+
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    let result = '';
+    let i = 0;
+    while (i < sql.length) {
+      // Single-line comment
+      if (sql[i] === '-' && sql[i + 1] === '-') {
+        const end = sql.indexOf('\n', i);
+        const chunk = end === -1 ? sql.slice(i) : sql.slice(i, end);
+        result += `<span class="sql-comment">${esc(chunk)}</span>`;
+        i += chunk.length;
+        continue;
+      }
+      // Block comment
+      if (sql[i] === '/' && sql[i + 1] === '*') {
+        const end = sql.indexOf('*/', i + 2);
+        const chunk = end === -1 ? sql.slice(i) : sql.slice(i, end + 2);
+        result += `<span class="sql-comment">${esc(chunk)}</span>`;
+        i += chunk.length;
+        continue;
+      }
+      // String literal (single-quoted)
+      if (sql[i] === "'") {
+        let j = i + 1;
+        while (j < sql.length) {
+          if (sql[j] === "'" && sql[j + 1] === "'") { j += 2; continue; }
+          if (sql[j] === "'") { j++; break; }
+          j++;
+        }
+        result += `<span class="sql-string">${esc(sql.slice(i, j))}</span>`;
+        i = j;
+        continue;
+      }
+      // Quoted identifier (double-quoted)
+      if (sql[i] === '"') {
+        let j = i + 1;
+        while (j < sql.length && sql[j] !== '"') j++;
+        result += `<span class="sql-identifier">${esc(sql.slice(i, j + 1))}</span>`;
+        i = j + 1;
+        continue;
+      }
+      // Numeric literal
+      if (/[0-9]/.test(sql[i]) && (i === 0 || !/[a-zA-Z_]/.test(sql[i - 1]))) {
+        let j = i;
+        while (j < sql.length && /[0-9.]/.test(sql[j])) j++;
+        result += `<span class="sql-number">${esc(sql.slice(i, j))}</span>`;
+        i = j;
+        continue;
+      }
+      // Word token (keyword, function, or plain identifier)
+      if (/[a-zA-Z_]/.test(sql[i])) {
+        let j = i;
+        while (j < sql.length && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+        const word = sql.slice(i, j);
+        const upper = word.toUpperCase();
+        if (KEYWORDS.has(upper)) {
+          result += `<span class="sql-keyword">${esc(word)}</span>`;
+        } else if (FUNCTIONS.has(upper)) {
+          result += `<span class="sql-function">${esc(word)}</span>`;
+        } else {
+          result += esc(word);
+        }
+        i = j;
+        continue;
+      }
+      result += esc(sql[i]);
+      i++;
+    }
+    // Wrap each line so CSS counters can add line numbers.
+    // Join with no separator — display:block on .sql-line handles the line breaks,
+    // so we avoid doubling the gap with a stray \n in the <pre>.
+    const numbered = result.split('\n')
+      .map(line => `<span class="sql-line">${line}</span>`)
+      .join('');
+    return this.sanitizer.bypassSecurityTrustHtml(numbered);
   }
 
   ngOnDestroy(): void {

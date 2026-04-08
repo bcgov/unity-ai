@@ -70,9 +70,9 @@ unity-ai/
 
 ## Tech Stack
 
-- **Frontend**: Angular 20, Material UI, PrimeNG
-- **Backend**: Flask, Azure OpenAI, LangChain, PGVector  
-- **Database**: PostgreSQL 16 with pgvector extension
+- **Frontend**: Angular 21, TypeScript 5.9, Vitest 4
+- **Backend**: Flask 3.1 (Python 3.13), Azure OpenAI, LangChain, pgvector
+- **Database**: PostgreSQL 17 with pgvector extension
 - **Container**: Docker (multi-stage build, OpenShift compatible)
 
 ## License

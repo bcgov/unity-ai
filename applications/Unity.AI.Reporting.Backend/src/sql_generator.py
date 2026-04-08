@@ -184,7 +184,8 @@ class SQLGenerator:
     
     def build_prompt(self, question: str, schemas: str,
                     past_questions: List[Dict], is_retry: bool = False,
-                    retry_error_type: Optional[str] = None) -> str:
+                    retry_error_type: Optional[str] = None,
+                    retry_error_detail: Optional[str] = None) -> str:
         """Build the prompt for SQL generation"""
         examples = self.load_examples()
         newline = '\n'
@@ -212,12 +213,18 @@ class SQLGenerator:
             # For service-level errors the model never ran, so SQL-specific guidance is not relevant
             service_errors = {"rate_limit", "connection_error"}
             if retry_error_type in service_errors:
-                retry_context = f"Note: {error_reason}. Please regenerate the query. "
+                retry_context = f"Previous attempt failed: {error_reason}. Please regenerate the query. "
             else:
                 retry_context = (
-                    f"Note: {error_reason}. "
-                    "Please try a different approach — avoid repeating the same join path or table choice "
-                    "as before, and consider alternative columns or query structures. "
+                    f"Previous attempt failed.\n"
+                    f"Error type: {retry_error_type or 'unknown'}\n"
+                )
+                if retry_error_detail:
+                    safe_detail = retry_error_detail.replace('"', "'")
+                    retry_context += f'Validation error: "{safe_detail}"\n'
+                retry_context += (
+                    "Avoid repeating the same join path or table choice. "
+                    "Fix the issue and generate a corrected SQL query. "
                 )
 
         prompt = (
@@ -248,7 +255,8 @@ class SQLGenerator:
         return prompt
     
     def _process_completion(self, completion_result, db_id: int,
-                           tenant_id: Optional[str] = None) -> Optional[Tuple]:
+                           tenant_id: Optional[str] = None,
+                           errors: Optional[List[str]] = None) -> Optional[Tuple]:
         """Process a single LLM completion, returning (fingerprint, sql, metadata) or None."""
         if not completion_result:
             return None
@@ -270,6 +278,8 @@ class SQLGenerator:
         is_valid, error = self.metabase.validate_sql(sql, db_id, tenant_id=tenant_id)
         if not is_valid:
             logger.warning(f"SQL validation failed: {error}\nFor sql: {sql}")
+            if errors is not None:
+                errors.append(error)
             return None
 
         # Generate fingerprint
@@ -290,8 +300,7 @@ class SQLGenerator:
                 continue
 
             # Unpack the tuple (text, usage)
-            raw, usage = result
-            logger.debug(f"Raw completion:\n{raw}")
+            _, usage = result
 
             # Aggregate tokens
             total_prompt += usage.get('prompt_tokens', 0)
@@ -321,7 +330,8 @@ class SQLGenerator:
 
     async def generate_sql(self, question: str, past_questions: List[Dict],
                           db_id: int, tenant_id: Optional[str] = None,
-                          is_retry: bool = False, retry_error_type: Optional[str] = None) -> Tuple[Optional[str], Optional[Dict], Optional[Dict]]:
+                          is_retry: bool = False, retry_error_type: Optional[str] = None,
+                          retry_error_detail: Optional[str] = None) -> Tuple[Optional[str], Optional[Dict], Optional[Dict], Optional[str]]:
         """
         Generate SQL from natural language question using majority voting.
 
@@ -341,10 +351,13 @@ class SQLGenerator:
         if hardcoded:
             # Hardcoded examples have no token usage
             sql, metadata = hardcoded
-            return sql, metadata, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            return sql, metadata, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, None
 
         # Get relevant schemas
         schemas = self.embeddings.get_formatted_schemas(question, db_id)
+        if not schemas:
+            logger.error(f"No schemas found for db_id={db_id}. Embeddings may not have been generated yet.")
+            return None, None, None
 
         # Generate multiple completions in parallel
         async with aiohttp.ClientSession() as session:
@@ -363,7 +376,7 @@ Output EXACTLY one word: RELATED or UNRELATED.
 
             if not parsed_schema:
                 logger.error("Schema parsing failed — no completion returned")
-                return None, None, None
+                return None, None, None, None
 
             print("Schema:", schemas)
             print("Parsed Schema:", parsed_schema[0])
@@ -371,7 +384,7 @@ Output EXACTLY one word: RELATED or UNRELATED.
 
             if parsed_schema[0].strip().upper() != "RELATED":
                 logger.error("Error: NSFW or irrelevant question.", exc_info=True)
-                return None, None, None
+                return None, None, None, None
 
             # Build prompt
             prompt = self.build_prompt(question, schemas, past_questions, is_retry=is_retry, retry_error_type=retry_error_type)
@@ -385,19 +398,25 @@ Output EXACTLY one word: RELATED or UNRELATED.
         # Aggregate token usage from all completions
         token_usage = self._aggregate_token_usage(completions)
 
-        # Process completions and extract valid candidates
+        # Process completions and extract valid candidates, collecting validation errors
+        validation_errors: List[str] = []
         candidates = [
             c for completion_result in completions
-            if (c := self._process_completion(completion_result, db_id, tenant_id=tenant_id)) is not None
+            if (c := self._process_completion(completion_result, db_id, tenant_id=tenant_id, errors=validation_errors)) is not None
         ]
 
+        # Join top 2 errors, truncate to keep prompt focused
+        MAX_ERROR_DETAIL_LENGTH = 200
+        combined_error = "; ".join(validation_errors[:2]) if validation_errors else None
+        error_detail = combined_error[:MAX_ERROR_DETAIL_LENGTH] if combined_error else None
+
         if not candidates:
-            logger.warning("No valid candidates generated")
-            return None, None, token_usage
+            logger.warning(f"No valid candidates generated. Error detail: {error_detail}")
+            return None, None, token_usage, error_detail
 
         # Majority voting on fingerprints
         sql, metadata = self._select_best_candidate(candidates)
-        return sql, metadata, token_usage
+        return sql, metadata, token_usage, None
     
     def _check_hardcoded_examples(self, question: str) -> Optional[Tuple[str, Dict]]:
         """Check for hardcoded example queries (for demo/testing)"""

@@ -32,6 +32,7 @@ export class App implements OnInit, OnDestroy {
   currentTurnIndex: number = 0;
   visualizationDropdownOpen: boolean = false;
   selectedVisualization: string = 'table';
+  readonly MAX_RETRIES = 2;
 
   constructor(
     private readonly authService: AuthService,
@@ -332,7 +333,7 @@ export class App implements OnInit, OnDestroy {
     this.currentTurnIndex = 0;
   }
 
-  async askQuestion() {
+  async askQuestion(retryCount: number = 0, retryErrorType?: Turn['errorType'], retryErrorDetail?: string | null) {
     if (this.question.trim() === "") {
       alert("Please enter a question.");
       return;
@@ -343,7 +344,10 @@ export class App implements OnInit, OnDestroy {
     
     const turn = {question: this.question.trim(), embed: {"url": "", "card_id": 0, "x_field": "", "y_field": "", "title": "", "visualization_options": [], "SQL": ""}, safeUrl: 'loading' as 'loading' | 'failure' | SafeResourceUrl, iframeLoaded: false, sqlPanelOpen: false, sql_explanation: "", sql_explanation_visible: false} as Turn;
     this.conversation.push(turn);
-    
+    if (retryCount > 0) {
+      turn.retryCount = retryCount;
+    }
+
     // Set the new turn as the current turn for navigation
     this.currentTurnIndex = this.conversation.length - 1;
     
@@ -353,32 +357,67 @@ export class App implements OnInit, OnDestroy {
       if (! await this.authService.isAuthenticated()) throw new Error('Not authenticated');
 
       turn.embed = await firstValueFrom(
-        this.apiService.askQuestion<Embed>(turn.question, this.conversation)
+        this.apiService.askQuestion<Embed>(turn.question, this.conversation, retryCount > 0, retryErrorType, retryErrorDetail)
       );
       turn.embed.current_visualization = 'table';
-      turn.iframeLoaded = true; // Mark as loaded since we're not using iframes anymore
-      turn.safeUrl = null; // No iframe URL needed anymore
+      turn.iframeLoaded = true;
+      turn.safeUrl = null;
 
       await this.saveChat();
-    } catch (error) {
-      console.error('Failed to process question:', error);
+    } catch (error: any) {
+      this.logger.error('Failed to process question:', error);
       turn.iframeLoaded = true;
       turn.safeUrl = "failure";
+
+      // Classify the error using the stable backend schema, falling back to HTTP status
+      const errorType = error?.error?.error_type;
+      const errorMsg = error?.error?.message;
+
+      turn.errorDetail = error?.error?.detail ?? null;
+
+      if (error?.message === 'Not authenticated') {
+        turn.errorType = 'unknown';
+        turn.errorMessage = 'Your session has expired. Please sign in again.';
+        turn.canRetry = false;
+      } else if (errorType === 'rate_limit' || error?.status === 429) {
+        turn.errorType = 'rate_limit';
+        turn.errorMessage = errorMsg || 'Rate limit exceeded. Please wait a moment and try again.';
+        turn.canRetry = true;
+      } else if (errorType === 'connection_error' || error?.status === 503) {
+        turn.errorType = 'connection_error';
+        turn.errorMessage = errorMsg || 'Connection error. The service may be temporarily unavailable.';
+        turn.canRetry = true;
+      } else if (errorType === 'ai_failure' || error?.status === 422) {
+        turn.errorType = 'ai_failure';
+        turn.errorMessage = errorMsg || "I couldn't generate a report from that question. Try rephrasing or adding more detail.";
+        turn.canRetry = false;
+      } else if (errorType === 'server_error' || (error?.status && error.status >= 500)) {
+        turn.errorType = 'server_error';
+        turn.errorMessage = errorMsg || 'Something went wrong on our end. Please try again.';
+        turn.canRetry = true;
+      } else {
+        turn.errorType = 'unknown';
+        turn.errorMessage = errorMsg || 'Something went wrong. Please try again.';
+        turn.canRetry = true;
+      }
     } finally {
       this.cdr.markForCheck();
     }
   }
 
   retryQuestion(turn: Turn): void {
+    const nextRetryCount = (turn.retryCount ?? 0) + 1;
+    const errorType = turn.errorType;
+
     // Reset the turn state and retry the question
     turn.safeUrl = "loading";
     turn.iframeLoaded = false;
     turn.sqlPanelOpen = false;
-    
+
     // Retry the question with the existing turn
     this.question = turn.question;
     this.conversation = this.conversation.filter(t => t !== turn);
-    this.askQuestion();
+    this.askQuestion(nextRetryCount, errorType, turn.errorDetail);
   }
 
   toggleSidebar(): void {
@@ -622,80 +661,33 @@ export class App implements OnInit, OnDestroy {
     ]);
 
     const esc = (s: string) =>
-      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
-    let result = '';
-    let i = 0;
-    while (i < sql.length) {
-      // Single-line comment
-      if (sql[i] === '-' && sql[i + 1] === '-') {
-        const end = sql.indexOf('\n', i);
-        const chunk = end === -1 ? sql.slice(i) : sql.slice(i, end);
-        result += `<span class="sql-comment">${esc(chunk)}</span>`;
-        i += chunk.length;
-        continue;
-      }
-      // Block comment
-      if (sql[i] === '/' && sql[i + 1] === '*') {
-        const end = sql.indexOf('*/', i + 2);
-        const chunk = end === -1 ? sql.slice(i) : sql.slice(i, end + 2);
-        result += `<span class="sql-comment">${esc(chunk)}</span>`;
-        i += chunk.length;
-        continue;
-      }
-      // String literal (single-quoted)
-      if (sql[i] === "'") {
-        let j = i + 1;
-        while (j < sql.length) {
-          if (sql[j] === "'" && sql[j + 1] === "'") { j += 2; continue; }
-          if (sql[j] === "'") { j++; break; }
-          j++;
-        }
-        result += `<span class="sql-string">${esc(sql.slice(i, j))}</span>`;
-        i = j;
-        continue;
-      }
-      // Quoted identifier (double-quoted)
-      if (sql[i] === '"') {
-        let j = i + 1;
-        while (j < sql.length && sql[j] !== '"') j++;
-        result += `<span class="sql-identifier">${esc(sql.slice(i, j + 1))}</span>`;
-        i = j + 1;
-        continue;
-      }
-      // Numeric literal
-      if (/[0-9]/.test(sql[i]) && (i === 0 || !/[a-zA-Z_]/.test(sql[i - 1]))) {
-        let j = i;
-        while (j < sql.length && /[0-9.]/.test(sql[j])) j++;
-        result += `<span class="sql-number">${esc(sql.slice(i, j))}</span>`;
-        i = j;
-        continue;
-      }
-      // Word token (keyword, function, or plain identifier)
-      if (/[a-zA-Z_]/.test(sql[i])) {
-        let j = i;
-        while (j < sql.length && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        const word = sql.slice(i, j);
-        const upper = word.toUpperCase();
-        if (KEYWORDS.has(upper)) {
-          result += `<span class="sql-keyword">${esc(word)}</span>`;
-        } else if (FUNCTIONS.has(upper)) {
-          result += `<span class="sql-function">${esc(word)}</span>`;
-        } else {
-          result += esc(word);
-        }
-        i = j;
-        continue;
-      }
-      result += esc(sql[i]);
-      i++;
-    }
+    // Ordered alternation: comments → strings → identifiers → any char.
+    // \w+ matches integers; classify() detects numbers via first-char check.
+    const TOKEN_RE = /--.*|\/\*[^]*?\*\/|'[^']*'|"[^"]*"|\w+|[^]/g;
+
+    const classify = (token: string): string => {
+      const ch = token[0];
+      if (ch === '-' || ch === '/') return `<span class="sql-comment">${esc(token)}</span>`;
+      if (ch === "'") return `<span class="sql-string">${esc(token)}</span>`;
+      if (ch === '"') return `<span class="sql-identifier">${esc(token)}</span>`;
+      if (ch >= '0' && ch <= '9') return `<span class="sql-number">${esc(token)}</span>`;
+      const upper = token.toUpperCase();
+      if (KEYWORDS.has(upper)) return `<span class="sql-keyword">${esc(token)}</span>`;
+      if (FUNCTIONS.has(upper)) return `<span class="sql-function">${esc(token)}</span>`;
+      return esc(token);
+    };
+
     // Wrap each line so CSS counters can add line numbers.
     // Join with no separator — display:block on .sql-line handles the line breaks,
     // so we avoid doubling the gap with a stray \n in the <pre>.
-    const numbered = result.split('\n')
+    const highlighted = sql.replaceAll(TOKEN_RE, classify);
+    const numbered = highlighted.split('\n')
       .map(line => `<span class="sql-line">${line}</span>`)
       .join('');
+    // Safe: all SQL content is HTML-escaped via esc(); only hardcoded <span> tags with
+    // static class names are injected.
     return this.sanitizer.bypassSecurityTrustHtml(numbered);
   }
 

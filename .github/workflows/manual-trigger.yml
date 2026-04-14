@@ -1,8 +1,6 @@
 # This is a basic workflow that is manually triggered
 
 name: Workflow - Run manual trigger
-permissions:
-  contents: read
 
 # Controls when the action will run. Workflow runs when manually triggered
 on:
@@ -57,6 +55,8 @@ jobs:
     needs: [Setup]
     runs-on: ubuntu-latest
     environment: ${{ inputs.name }}
+    permissions:
+      contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -85,6 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.name }}
     permissions:
+      contents: read
       actions: write
     steps:
     - name: Checkout repository
@@ -106,6 +107,8 @@ jobs:
     needs: [Setup,Branch,PushVariables]
     runs-on: ubuntu-latest
     environment: ${{ inputs.name }}
+    permissions:
+      contents: read
     steps:
     - uses: actions/checkout@v6
     - name: Build Docker images

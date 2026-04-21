@@ -80,6 +80,12 @@ jobs:
             echo "Using project version: $VERSION"
           fi
 
+      - name: SonarCloud sonar.projectVersion configuration
+        run: |
+          echo "BUILD_VERSION environment variable: $BUILD_VERSION"
+          echo "Contents of sonar-project.properties:"
+          cat applications/sonar-project.properties | grep -E "(sonar.projectVersion|BUILD_VERSION)" || echo "No projectVersion found in sonar-project.properties"
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7
         with:

@@ -83,7 +83,7 @@ jobs:
             sed -i "/sonar.projectVersion=/d" applications/sonar-project.properties
           fi
 
-      - name: SonarCloud sonar.projectVersion configuration
+      - name: SonarCloud sonar.projectVersion
         run: |
           echo "BUILD_VERSION environment variable: $BUILD_VERSION"
           echo "Updated sonar-project.properties:"

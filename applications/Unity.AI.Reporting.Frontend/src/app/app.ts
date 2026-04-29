@@ -1,6 +1,7 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
+import { DecimalPipe } from '@angular/common';
 import { SafeResourceUrl, DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { Embed } from './embed';
@@ -14,11 +15,12 @@ import { LoggerService } from './services/logger.service';
 import { IframeDetectorService } from './iframe-detector.service';
 import { ConfigService } from './services/config.service';
 import { SidebarComponent, Chat } from './sidebar/sidebar';
+import { AlertComponent } from './alert/alert';
 import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent],
+  imports: [FormsModule, DecimalPipe, SqlExplanationComponent, SidebarComponent, ToastComponent, AlertComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -33,6 +35,8 @@ export class App implements OnInit, OnDestroy {
   visualizationDropdownOpen: boolean = false;
   selectedVisualization: string = 'table';
   readonly MAX_RETRIES = 2;
+  showDeleteQuestionAlert: boolean = false;
+  private turnToDelete: Turn | null = null;
 
   constructor(
     private readonly authService: AuthService,
@@ -252,19 +256,28 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
-  async deleteQuestion(turn: Turn) {
+  deleteQuestion(turn: Turn): void {
+    this.turnToDelete = turn;
+    this.showDeleteQuestionAlert = true;
+  }
+
+  async confirmDeleteQuestion(): Promise<void> {
+    if (!this.turnToDelete) return;
+    const turn = this.turnToDelete;
+    this.cancelDeleteQuestion();
+
     try {
       // Delete the card from the backend
       await firstValueFrom(
         this.apiService.deleteCard(turn.embed.card_id)
       );
-      
+
       // Find the index of the turn being deleted
       const deletedIndex = this.conversation.findIndex(t => t === turn);
-      
+
       // Remove the turn from the conversation
       this.conversation = this.conversation.filter(t => t !== turn);
-      
+
       // If this was the last question in the chat, delete the chat entirely
       if (this.conversation.length === 0 && this.currentChatId) {
         try {
@@ -272,12 +285,12 @@ export class App implements OnInit, OnDestroy {
             this.apiService.deleteChat(this.currentChatId)
           );
           this.currentChatId = null;
-          
+
           // Refresh the sidebar to remove the deleted chat
           if (this.sidebar) {
             this.sidebar.loadChats();
           }
-          
+
           // Show success toast for entire chat deletion
           this.toastService.success('Report deleted successfully');
         } catch (deleteError) {
@@ -286,20 +299,20 @@ export class App implements OnInit, OnDestroy {
         }
         return; // Exit early since there's nothing left to update
       }
-      
+
       // Adjust currentTurnIndex if necessary
       if (deletedIndex <= this.currentTurnIndex && this.currentTurnIndex > 0) {
         this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
       } else if (this.currentTurnIndex >= this.conversation.length) {
         this.currentTurnIndex = Math.max(0, this.conversation.length - 1);
       }
-      
+
       // Update dropdown selection for the new current turn
       // this.updateDropdownSelection(); // VISUALIZATION: commented out
-      
+
       // Save the updated conversation to the database
       await this.saveChat();
-      
+
       // Show success toast for individual question deletion
       this.toastService.success('Question deleted successfully');
 
@@ -310,6 +323,11 @@ export class App implements OnInit, OnDestroy {
     } finally {
       this.cdr.markForCheck();
     }
+  }
+
+  cancelDeleteQuestion(): void {
+    this.showDeleteQuestionAlert = false;
+    this.turnToDelete = null;
   }
 
   // VISUALIZATION: Commented out - not functional since switching to Metabase redirect.
@@ -420,6 +438,18 @@ export class App implements OnInit, OnDestroy {
     this.question = turn.question;
     this.conversation = this.conversation.filter(t => t !== turn);
     this.askQuestion(nextRetryCount, errorType, turn.errorDetail);
+  }
+
+  getFreshAnswer(turn: Turn): void {
+    if (this.isLoading) return;
+    // Resubmit the question with retry_count=1 so the backend skips the semantic cache (is_retry=true).
+    this.question = turn.question;
+    this.conversation = this.conversation.filter(t => t !== turn);
+    this.askQuestion(1);
+  }
+
+  get isLoading(): boolean {
+    return this.conversation.some(t => t.safeUrl === 'loading');
   }
 
   toggleSidebar(): void {

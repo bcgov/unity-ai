@@ -2,7 +2,6 @@
 # Flask serves both the static Angular frontend AND the API endpoints
 # No nginx needed - everything runs through Flask
 
-
 # Stage 1: Build Angular Frontend
 FROM node:24-alpine AS frontend-build
 
@@ -60,6 +59,9 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn && \
     chmod 777 /entrypoint.sh && \
     chown appuser:appuser /entrypoint.sh && \
     chown -R appuser:appuser /app
+
+# Default to production; override via env var for local development
+ENV FLASK_ENV=production
 
 # Expose port 8080
 EXPOSE 8080

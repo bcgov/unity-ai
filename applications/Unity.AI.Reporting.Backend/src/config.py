@@ -37,37 +37,20 @@ class MetabaseConfig:
     api_key: str
     embed_secret: str
     default_db_id: int = 3
+    map_region_uuid: str = "1c5d50ee-4389-4593-37c1-fa8d4687ff4c"
     
 
 @dataclass
 class AIConfig:
     """AI/LLM configuration settings"""
-    # Azure OpenAI settings
+    # Azure OpenAI settings — only endpoint and key come from env vars
     azure_endpoint: str = ""
     azure_api_key: str = ""
-    azure_deployment: str = ""
-    azure_api_version: str = "2024-02-01"
-    azure_embedding_deployment: str = ""
-    
-    # Model settings
-    model: str = "gpt-4o-mini"
-    embedding_model: str = "text-embedding-3-large"
+    azure_deployment: str = "gpt-5-mini"
+    azure_api_version: str = "2024-10-21"
+    azure_embedding_deployment: str = "text-embedding-3-large"
     temperature: float = 0.2
     k_samples: int = 7
-    
-    # Legacy OpenAI settings (kept for compatibility)
-    completion_endpoint: str = ""
-    completion_key: str = ""
-    
-    @property
-    def use_azure(self) -> bool:
-        """Check if Azure OpenAI should be used"""
-        return bool(self.azure_endpoint and self.azure_api_key and self.azure_deployment)
-
-    @property
-    def use_azure_embeddings(self) -> bool:
-        """Check if Azure OpenAI embeddings should be used"""
-        return bool(self.azure_endpoint and self.azure_api_key and self.azure_embedding_deployment)
 
     @property
     def supports_temperature(self) -> bool:
@@ -93,6 +76,7 @@ class AppConfig:
     semantic_cache_top_k: int = 5
     llm_judge_enabled: bool = False
     llm_judge_score_threshold: float = 8.0
+    preview_row_limit: int = 1000
 
 
 class Config:
@@ -101,7 +85,7 @@ class Config:
     def __init__(self):
         self.database = DatabaseConfig(
             host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
+            port="5432",
             name=os.getenv("DB_NAME", "unity_ai"),
             user=os.getenv("DB_USER", "unity_user"),
             password=os.getenv("DB_PASSWORD", "unity_pass")
@@ -115,18 +99,8 @@ class Config:
         )
         
         self.ai = AIConfig(
-            # Azure OpenAI settings
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
             azure_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
-            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
-            azure_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_embedding_deployment=os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", ""),
-            # Model settings
-            model=os.getenv("AI_MODEL", "gpt-4o-mini"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-            # Legacy OpenAI settings
-            completion_endpoint=os.getenv("COMPLETION_ENDPOINT", ""),
-            completion_key=os.getenv("COMPLETION_KEY", "")
         )
         
         flask_env = os.getenv("FLASK_ENV", "development")
@@ -144,6 +118,7 @@ class Config:
             semantic_cache_top_k=int(os.getenv("SEMANTIC_CACHE_TOP_K", "5")),
             llm_judge_enabled=os.getenv("LLM_JUDGE_ENABLED", "false").lower() == "true",
             llm_judge_score_threshold=float(os.getenv("LLM_JUDGE_SCORE_THRESHOLD", "8.0")),
+            preview_row_limit=int(os.getenv("PREVIEW_ROW_LIMIT", "1000")),
         )
         
         # Tenant configuration - extensible for different use cases
@@ -169,13 +144,6 @@ class Config:
                         mappings = {"default": mappings}
 
                 print(f"Loaded tenant mappings from {config_file}: {mappings}")
-
-                # Override default db_id with environment variable if set
-                if "default" in mappings:
-                    env_db_id = os.getenv("DEFAULT_EMBED_DB_ID")
-                    if env_db_id:
-                        mappings["default"]["db_id"] = int(env_db_id)
-
                 return mappings
             except FileNotFoundError:
                 continue
@@ -184,7 +152,7 @@ class Config:
         print("No tenant_config.json found, using hardcoded defaults")
         return {
             "default": {
-                "db_id": int(os.getenv("DEFAULT_EMBED_DB_ID", "5")),
+                "db_id": 5,
                 "collection_id": 16,
                 "schema_types": ["public"]
             }

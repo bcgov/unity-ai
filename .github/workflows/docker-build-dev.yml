@@ -38,6 +38,8 @@ jobs:
   Setup:
     runs-on: ubuntu-latest
     environment: dev
+    permissions:
+      contents: read
     steps:
     - name: Get variables
       run: |

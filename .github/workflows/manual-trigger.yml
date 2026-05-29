@@ -37,6 +37,8 @@ jobs:
   Setup:
     runs-on: ubuntu-latest
     environment: ${{ inputs.name }}
+    permissions:
+      contents: read
     steps:
     - name: Get variables
       run: |

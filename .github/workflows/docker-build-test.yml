@@ -38,6 +38,8 @@ jobs:
   Setup:
     runs-on: ubuntu-latest
     environment: test
+    permissions:
+      contents: read
     steps:
     - name: Get variables
       run: |
@@ -87,6 +89,8 @@ jobs:
     needs: [Setup,Branch]
     runs-on: ubuntu-latest
     environment: test
+    permissions:
+      contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4

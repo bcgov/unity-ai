@@ -1,6 +1,6 @@
 # Security Policies and Procedures
 
-This document outlines security procedures for the Economy Sector Reporting AI project.
+This document outlines security procedures for the Unity Reporting AI project.
 
 - [Supported Versions](#supported-versions)
 - [Reporting a Security Bug](#reporting-a-security-bug)

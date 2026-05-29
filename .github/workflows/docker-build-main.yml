@@ -38,6 +38,8 @@ jobs:
   Setup:
     runs-on: ubuntu-latest
     environment: main
+    permissions:
+      contents: read
     steps:
     - name: Get variables
       run: |
@@ -88,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: main
     permissions:
-      contents: write
+      contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6

@@ -91,14 +91,11 @@ jobs:
     environment: main
     permissions:
       contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GH_API_TOKEN }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
           fetch-depth: '1'
-          token: ${{ secrets.GH_API_TOKEN }}
     - name: Generate Next Git Tag
       id: tag_selector
       run: |

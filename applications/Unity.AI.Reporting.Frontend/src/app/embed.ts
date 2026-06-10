@@ -7,6 +7,7 @@ export interface Embed {
     SQL: string;
     current_visualization?: string; // Current visualization type being displayed
     sql_explanation?: string; // Explanation of the generated SQL
+    sql_explanation_error?: boolean; // True when explanation generation failed; gates retry
     tokens?: {
         prompt_tokens: number;      // Input tokens (combined from SQL generation + explanation)
         completion_tokens: number;  // Output tokens (combined from SQL generation + explanation)
@@ -16,4 +17,12 @@ export interface Embed {
     cache_similarity?: number;      // Cosine similarity score (0–1) of the cache hit
     cache_hit_type?: 'exact_hit' | 'semantic_hit' | 'fuzzy_hit' | 'llm_judge_hit';
     cache_original_query?: string;  // The original cached query (set for llm_judge_hit only)
+    card_data?: CardData | null;    // Inline preview rows from Metabase (null when fetch failed)
+}
+
+export interface CardData {
+    columns: string[];
+    rows: unknown[][];
+    total_rows: number;
+    truncated: boolean;
 }

@@ -91,6 +91,9 @@ jobs:
     environment: main
     permissions:
       contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GH_API_TOKEN }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6

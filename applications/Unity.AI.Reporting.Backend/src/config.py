@@ -6,7 +6,7 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -76,6 +76,8 @@ class AppConfig:
     llm_judge_enabled: bool = False
     llm_judge_score_threshold: float = 8.0
     preview_row_limit: int = 1000
+    data_model_preview_row_limit: int = 1
+    cors_allowed_origins: list[str] = field(default_factory=list)
 
 
 class Config:
@@ -120,6 +122,10 @@ class Config:
             llm_judge_enabled=os.getenv("LLM_JUDGE_ENABLED", "false").lower() == "true",
             llm_judge_score_threshold=float(os.getenv("LLM_JUDGE_SCORE_THRESHOLD", "8.0")),
             preview_row_limit=int(os.getenv("PREVIEW_ROW_LIMIT", "1000")),
+            data_model_preview_row_limit=int(os.getenv("DATA_MODEL_PREVIEW_ROW_LIMIT", "1")),
+            cors_allowed_origins=[
+                o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+            ],
         )
     
     def _load_tenant_mappings(self) -> Dict[str, Dict[str, Any]]:

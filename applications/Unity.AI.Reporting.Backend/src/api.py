@@ -12,7 +12,8 @@ from database import db_manager, chat_repository, feedback_repository, cache_rep
 from metabase import metabase_client
 from chat import chat_manager
 from sql_generator import sql_generator
-from auth import require_auth, get_user_from_token
+from model_generator import data_model_generator
+from auth import require_auth, get_user_from_token, require_data_model_permission
 from embeddings import embedding_manager
 from static_routes import add_static_routes
 import cache_reranker
@@ -23,6 +24,8 @@ import re
 ADMIN_PRIVILEGES_REQUIRED = "Admin privileges required"
 INTERNAL_SERVER_ERROR = "Internal server error"
 CHAT_NOT_FOUND = "Chat not found"
+CARD_ID_REQUIRED = "card_id is required"
+CARD_ID_INVALID = "card_id must be a valid integer"
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -164,7 +167,10 @@ def _classify_sql_generation_error(error):
 def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__)
-    CORS(app)
+    # Scope CORS to /api/* and restrict to configured origins.
+    # Frontend is served same-origin from this Flask app, so CORS is only needed
+    # for external callers (set CORS_ALLOWED_ORIGINS env var as a comma list).
+    CORS(app, resources={r"/api/*": {"origins": config.app.cors_allowed_origins or []}})
     
     # Configure Flask based on environment
     app.config['DEBUG'] = config.app.debug
@@ -381,7 +387,7 @@ def get_feedback_for_admin():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error retrieving feedback: {e}", exc_info=True)
+        logger.exception(f"Error retrieving feedback: {e}")
         return jsonify({"error": "Failed to retrieve feedback"}), 500
 
 def _build_viz_settings(visualization_options: list) -> dict:
@@ -391,11 +397,12 @@ def _build_viz_settings(visualization_options: list) -> dict:
     return {}
 
 
-def _shape_card_data(card_data):
+def _shape_card_data(card_data, limit=None):
     """Turn Metabase's `{cols, rows}` payload into the frontend preview shape.
 
-    Truncates rows to `config.app.preview_row_limit`. Returns None when the
-    payload is missing or malformed so the frontend can fall back to button-only.
+    Truncates rows to `limit` (defaults to `config.app.preview_row_limit` when
+    None — the data-model preview passes its own smaller limit). Returns None when
+    the payload is missing or malformed so the frontend can fall back to button-only.
     """
     if not isinstance(card_data, dict):
         return None
@@ -404,7 +411,7 @@ def _shape_card_data(card_data):
     if not isinstance(cols, list) or not isinstance(rows, list):
         return None
 
-    limit = config.app.preview_row_limit
+    limit = config.app.preview_row_limit if limit is None else limit
     columns = [
         (c.get("display_name") or c.get("name") or "") if isinstance(c, dict) else str(c)
         for c in cols
@@ -416,6 +423,43 @@ def _shape_card_data(card_data):
         "total_rows": total_rows,
         "truncated": total_rows > limit,
     }
+
+
+def _attach_preview_to_proposal(proposal, db_id, tenant_id):
+    """Enrich a model proposal with real columns + a sample row from Metabase.
+
+    Reads the authoritative columns and a one-row sample (the same source the
+    frontend table renders), replacing the generator's regex-inferred `columns`.
+    This is what fixes added columns being missing and bogus `...` headers in the
+    review preview.
+
+    The generator already executed the validated SQL once (bounded) and stashes the
+    raw `{cols, rows}` payload in the private `_preview_raw` key — reuse it instead of
+    running the query a second time. Falls back to executing once if that key is
+    absent (e.g. a path that didn't run the SQL). On invalid SQL or any failure, the
+    generator's existing `columns` are kept and `preview_data` is None.
+    """
+    raw = proposal.pop("_preview_raw", None)
+    proposal["preview_data"] = None
+
+    if raw is None:
+        # No pre-fetched rows — only execute if the SQL validated.
+        if not proposal.get("valid") or not proposal.get("sql"):
+            return proposal
+        try:
+            raw = metabase_client.execute_sql(
+                proposal["sql"], db_id, tenant_id,
+                max_rows=config.app.data_model_preview_row_limit,
+            )
+        except Exception as e:
+            logger.warning("Could not attach preview data to proposal: %s", e)
+            return proposal
+
+    shaped = _shape_card_data(raw, limit=config.app.data_model_preview_row_limit)
+    if shaped is not None:
+        proposal["columns"] = shaped["columns"]
+        proposal["preview_data"] = shaped
+    return proposal
 
 
 def _fuzzy_cache_lookup(tenant_id, db_id, schema_types, collection_name, normalized_query):
@@ -725,12 +769,325 @@ def ask():
     try:
         return asyncio.run(_async_ask(data, user_data))
     except Exception as e:
-        logger.error(f"Error in /api/ask: {e}", exc_info=True)
+        logger.exception(f"Error in /api/ask: {e}")
         return _error_response(
             "server_error",
             "Something went wrong on our end. Please try again.",
             500,
             detail=str(e)
+        )
+
+
+@app.route("/api/data-models/views", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def get_data_model_views():
+    """Discover available worksheet/scoresheet views for the tenant."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    tenant_config = config.get_tenant_config(tenant_id)
+    db_id = tenant_config["db_id"]
+
+    logger.info(f"Data model views request - Tenant: {tenant_id}, DB: {db_id}")
+
+    try:
+        views = data_model_generator.discover_views(db_id, tenant_id)
+        return jsonify({"views": views}), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/views: {e}")
+        return _error_response(
+            "server_error",
+            "Failed to discover available views. Please try again.",
+            500,
+            detail=str(e)
+        )
+
+
+@app.route("/api/data-models/core-fields", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def get_data_model_core_fields():
+    """Return the curated list of public.Applications columns users can opt-in to."""
+    return jsonify({"core_fields": data_model_generator.get_core_fields()}), 200
+
+
+@app.route("/api/data-models/preview", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def preview_data_models():
+    """Generate an AI model proposal for a selected view."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    tenant_config = config.get_tenant_config(tenant_id)
+    db_id = tenant_config["db_id"]
+
+    body = request.get_json(silent=True) or {}
+    view_name = body.get("view_name", "").strip()
+    view_names = body.get("view_names", [])
+    core_fields_raw = body.get("core_fields")
+    selected_versions_raw = body.get("selected_versions")
+
+    # Accept either view_names (multi) or view_name (single, backward-compat)
+    if view_names and isinstance(view_names, list):
+        view_names = [v.strip() for v in view_names if isinstance(v, str) and v.strip()]
+    elif view_name:
+        view_names = [view_name]
+    else:
+        return jsonify({"error": "view_name or view_names is required"}), 400
+
+    if not view_names:
+        return jsonify({"error": "At least one view name is required"}), 400
+
+    # core_fields is optional; None falls back to defaults inside the generator
+    core_fields = None
+    if isinstance(core_fields_raw, list):
+        core_fields = [c.strip() for c in core_fields_raw if isinstance(c, str) and c.strip()]
+
+    # selected_versions is optional; None means use all versions
+    selected_versions = None
+    if isinstance(selected_versions_raw, list):
+        selected_versions = [v.strip() for v in selected_versions_raw if isinstance(v, str) and v.strip()]
+
+    logger.info(
+        f"Data model preview request - Tenant: {tenant_id}, Views: {view_names}, "
+        f"CoreFields: {core_fields}"
+    )
+
+    try:
+        if len(view_names) == 1:
+            proposal = asyncio.run(
+                data_model_generator.preview_model(
+                    view_names[0], db_id, tenant_id, core_fields, selected_versions
+                )
+            )
+        else:
+            proposal = asyncio.run(
+                data_model_generator.preview_combined_model(
+                    view_names, db_id, tenant_id, core_fields
+                )
+            )
+        _attach_preview_to_proposal(proposal, db_id, tenant_id)
+        return jsonify({"proposal": proposal}), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/preview: {e}")
+        return _error_response(
+            "server_error",
+            "Failed to generate data model proposal. Please try again.",
+            500,
+            detail=str(e)
+        )
+
+
+@app.route("/api/data-models/create", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def create_data_models():
+    """Step 2: Create user-approved data models in Metabase."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    tenant_config = config.get_tenant_config(tenant_id)
+    db_id = tenant_config["db_id"]
+    collection_id = tenant_config["collection_id"]
+
+    body = request.get_json(silent=True) or {}
+    definitions = body.get("models", [])
+
+    if not isinstance(definitions, list) or not definitions:
+        return jsonify({"error": "models array is required"}), 400
+
+    # Validate each entry has required string fields
+    for defn in definitions:
+        if not isinstance(defn, dict):
+            return jsonify({"error": "Each model must be an object"}), 400
+        if not all(isinstance(defn.get(k), str) for k in ("name", "description", "sql")):
+            return jsonify({"error": "Each model requires name, description, sql"}), 400
+
+    logger.info(
+        f"Data model create request - Tenant: {tenant_id}, count: {len(definitions)}"
+    )
+
+    try:
+        result = data_model_generator.create_models(
+            definitions, db_id, collection_id, tenant_id
+        )
+        metabase_base = config.metabase.url
+        return jsonify({
+            "models": [
+                {**m, "metabase_url": f"{metabase_base}/model/{m['card_id']}"}
+                for m in result["created"]
+            ],
+            "errors": result["errors"],
+        }), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/create: {e}")
+        return _error_response(
+            "server_error",
+            "Failed to create data models. Please try again.",
+            500,
+        )
+
+
+@app.route("/api/data-models/list", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def list_data_models():
+    """List existing model cards in the tenant's collection."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    tenant_config = config.get_tenant_config(tenant_id)
+    collection_id = tenant_config["collection_id"]
+
+    try:
+        models = data_model_generator.discover_existing_models(collection_id, tenant_id)
+        return jsonify({"models": models}), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/list: {e}")
+        return _error_response(
+            "server_error", "Failed to list existing models.", 500, detail=str(e)
+        )
+
+
+@app.route("/api/data-models/detail", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def data_model_detail():
+    """Fetch full detail (SQL + columns) for one model card."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    body = request.get_json(silent=True) or {}
+    card_id = body.get("card_id")
+    if card_id is not None:
+        try:
+            card_id = int(card_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": CARD_ID_INVALID}), 400
+    else:
+        return jsonify({"error": CARD_ID_REQUIRED}), 400
+
+    try:
+        card = metabase_client.get_card(card_id, tenant_id)
+        tenant_config = config.get_tenant_config(tenant_id)
+        db_id = tenant_config["db_id"]
+        sql, columns = metabase_client.card_sql_and_columns(card, db_id, tenant_id)
+        return jsonify({
+            "card_id": card_id,
+            "name": card.get("name", ""),
+            "description": card.get("description") or "",
+            "sql": sql,
+            "columns": columns,
+        }), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/detail: {e}")
+        return _error_response(
+            "server_error", "Failed to fetch model detail.", 500, detail=str(e)
+        )
+
+
+@app.route("/api/data-models/preview-data", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def data_model_preview_data():
+    """Execute a saved model's SQL via Metabase and return preview rows."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    body = request.get_json(silent=True) or {}
+    card_id = body.get("card_id")
+    if card_id is not None:
+        try:
+            card_id = int(card_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": CARD_ID_INVALID}), 400
+    else:
+        return jsonify({"error": CARD_ID_REQUIRED}), 400
+
+    try:
+        card = metabase_client.get_card(card_id, tenant_id)
+        tenant_config = config.get_tenant_config(tenant_id)
+        db_id = tenant_config["db_id"]
+        sql, _ = metabase_client.card_sql_and_columns(card, db_id, tenant_id)
+        raw = metabase_client.execute_sql(
+            sql, db_id, tenant_id, max_rows=config.app.data_model_preview_row_limit
+        )
+        shaped = _shape_card_data(raw, limit=config.app.data_model_preview_row_limit)
+        if shaped is None:
+            return _error_response("server_error", "Could not read query results.", 500)
+        return jsonify(shaped), 200
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/preview-data: {e}")
+        return _error_response(
+            "server_error", "Failed to preview model data.", 500, detail=str(e)
+        )
+
+
+@app.route("/api/data-models/modify-preview", methods=["POST"])
+@require_auth
+@require_data_model_permission
+def modify_data_model_preview():
+    """Generate a modified-variant preview from an existing model."""
+    user_data = get_user_from_token()
+    tenant_id = user_data["tenant"]
+
+    tenant_config = config.get_tenant_config(tenant_id)
+    db_id = tenant_config["db_id"]
+
+    body = request.get_json(silent=True) or {}
+    logger.debug(
+        "modify-preview request body: card_id=%s (type=%s), prompt_len=%d, view_names=%s, core_fields=%s",
+        body.get("card_id"), type(body.get("card_id")).__name__,
+        len(body.get("prompt", "")), body.get("view_names", []), body.get("core_fields", []),
+    )
+    card_id = body.get("card_id")
+    prompt = body.get("prompt", "").strip()
+    view_names = body.get("view_names", [])
+    core_fields_raw = body.get("core_fields")
+
+    # Accept card_id as int or numeric string
+    if card_id is not None:
+        try:
+            card_id = int(card_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": CARD_ID_INVALID}), 400
+    else:
+        return jsonify({"error": CARD_ID_REQUIRED}), 400
+
+    # Distinguish "key not sent" (None) from "key sent as list" (intent, even if empty).
+    # An empty list is a valid intent signal — the user toggled the picker.
+    core_fields_provided = isinstance(core_fields_raw, list)
+    core_fields = None
+    if core_fields_provided:
+        core_fields = [c.strip() for c in core_fields_raw if isinstance(c, str) and c.strip()]
+
+    if not prompt and not view_names and not core_fields_provided:
+        return jsonify({
+            "error": "At least one of prompt, view_names, or core_fields is required"
+        }), 400
+
+    try:
+        result = asyncio.run(
+            data_model_generator.preview_model_modification(
+                card_id, prompt, view_names, db_id, tenant_id,
+                core_fields=core_fields,
+            )
+        )
+        _attach_preview_to_proposal(result, db_id, tenant_id)
+        return jsonify({"proposal": result}), 200
+    except ValueError:
+        # Detail is logged server-side; the client gets a generic message so
+        # internal exception text isn't exposed externally.
+        logger.warning(
+            "Validation error in /api/data-models/modify-preview", exc_info=True
+        )
+        return _error_response("bad_request", "Invalid request parameters.", 400)
+    except Exception as e:
+        logger.exception(f"Error in /api/data-models/modify-preview: {e}")
+        return _error_response(
+            "server_error", "Failed to generate modified model.", 500
         )
 
 
@@ -778,7 +1135,7 @@ def change_display():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error in /api/change_display: {e}", exc_info=True)
+        logger.exception(f"Error in /api/change_display: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -794,7 +1151,7 @@ def delete_question():
         card_id = data.get("card_id")
 
         if not card_id:
-            return abort(400, "card_id is required")
+            return abort(400, CARD_ID_REQUIRED)
 
         # Validate and sanitize card_id
         safe_card_id = _sanitize_card_id(card_id)
@@ -805,7 +1162,7 @@ def delete_question():
         return {"success": success}
 
     except Exception as e:
-        logger.error(f"Error in /api/delete: {e}", exc_info=True)
+        logger.exception(f"Error in /api/delete: {e}")
         return {"success": False}
 
 
@@ -832,7 +1189,7 @@ def explain_sql():
     try:
         return asyncio.run(async_explain_sql())
     except Exception as e:
-        logger.error(f"Error in /api/explain_sql: {e}", exc_info=True)
+        logger.exception(f"Error in /api/explain_sql: {e}")
         return {
             "explanation": "This query retrieves and analyzes your data."
         }, 200
@@ -855,7 +1212,7 @@ def get_chats():
         return jsonify(chats), 200
 
     except Exception as e:
-        logger.error(f"Error getting chats: {e}", exc_info=True)
+        logger.exception(f"Error getting chats: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -876,7 +1233,7 @@ def get_chat(chat_id):
         return jsonify(chat_data), 200
 
     except Exception as e:
-        logger.error(f"Error getting chat: {e}", exc_info=True)
+        logger.exception(f"Error getting chat: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -906,7 +1263,7 @@ def save_chat():
         return {"chat_id": result_chat_id}, 200
 
     except Exception as e:
-        logger.error(f"Error saving chat: {e}", exc_info=True)
+        logger.exception(f"Error saving chat: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -928,7 +1285,7 @@ def delete_chat(chat_id):
         return {"success": True}, 200
 
     except Exception as e:
-        logger.error(f"Error deleting chat: {e}", exc_info=True)
+        logger.exception(f"Error deleting chat: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -1003,7 +1360,7 @@ def submit_feedback():
         }, 200
 
     except Exception as e:
-        logger.error(f"Error submitting feedback: {e}", exc_info=True)
+        logger.exception(f"Error submitting feedback: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -1030,7 +1387,7 @@ def get_feedback(feedback_id):
         return jsonify(feedback_data), 200
 
     except Exception as e:
-        logger.error(f"Error getting feedback: {e}", exc_info=True)
+        logger.exception(f"Error getting feedback: {e}")
         return abort(500, INTERNAL_SERVER_ERROR)
 
 
@@ -1073,6 +1430,6 @@ def update_feedback_status(feedback_id):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error updating feedback status: {e}", exc_info=True)
+        logger.exception(f"Error updating feedback status: {e}")
         return jsonify({"error": "Failed to update feedback status"}), 500
 

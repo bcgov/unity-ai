@@ -149,8 +149,8 @@
   border-top: 1px solid #e9ecef;
   padding: 12px;
   display: flex;
-  /* TEMPORARY MVP: Changed from space-between to flex-end while Report Bug button is hidden */
   justify-content: flex-end;
+  gap: 8px;
   flex-shrink: 0;
   background: #fff;
 }
@@ -185,6 +185,12 @@
   background-color: #d1ecf1;
   border-color: #17a2b8;
   color: #0c5460;
+}
+
+.models-btn:hover {
+  background-color: #e2f0d9;
+  border-color: #28a745;
+  color: #155724;
 }
 
 /* Feedback Modal */
@@ -472,7 +478,6 @@
 .info-btn-close:active {
   transform: translateY(1px);
 }
-
 @media (max-width: 768px) {
   .sidebar {
     width: 280px;

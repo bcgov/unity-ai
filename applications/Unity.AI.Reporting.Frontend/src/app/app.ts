@@ -1,6 +1,7 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { Embed } from './embed';
@@ -22,7 +23,7 @@ const SQL_EXPLANATION_ERROR_TEXT = 'Unable to generate explanation at this time.
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, SqlExplanationComponent, SidebarComponent, ToastComponent, AlertComponent],
+  imports: [FormsModule, RouterLink, SqlExplanationComponent, SidebarComponent, ToastComponent, AlertComponent],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -55,6 +56,11 @@ export class App implements OnInit, OnDestroy {
   @ViewChild('turnsContainer') private readonly turnsContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('sqlAnimationContainer') private readonly sqlAnimationContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('sidebar') private readonly sidebar!: SidebarComponent;
+
+  /** Whether to show the "Build a data model" entry point (Create/Edit Data Model permission). */
+  get canEditDataModel(): boolean {
+    return this.authService.canEditDataModel();
+  }
 
   ngOnInit(): void {
     this.initialize();
@@ -271,7 +277,7 @@ export class App implements OnInit, OnDestroy {
       );
 
       // Find the index of the turn being deleted
-      const deletedIndex = this.conversation.findIndex(t => t === turn);
+      const deletedIndex = this.conversation.indexOf(turn);
 
       // Remove the turn from the conversation
       this.conversation = this.conversation.filter(t => t !== turn);
@@ -497,7 +503,7 @@ export class App implements OnInit, OnDestroy {
       }
 
       // Use the most recent embed's title, or fall back to the first question
-      const mostRecentTurn = this.conversation[this.conversation.length - 1];
+      const mostRecentTurn = this.conversation.at(-1);
       const chatTitle = mostRecentTurn?.embed?.title || this.conversation[0]?.question || 'New Chat';
 
       const response = await firstValueFrom(
@@ -521,7 +527,6 @@ export class App implements OnInit, OnDestroy {
     if (this.currentTurnIndex > 0) {
       this.currentTurnIndex--;
       this.scrollToTurn(this.currentTurnIndex);
-      // this.updateDropdownSelection(); // VISUALIZATION: commented out
     }
   }
 
@@ -529,7 +534,6 @@ export class App implements OnInit, OnDestroy {
     if (this.currentTurnIndex < this.conversation.length - 1) {
       this.currentTurnIndex++;
       this.scrollToTurn(this.currentTurnIndex);
-      // this.updateDropdownSelection(); // VISUALIZATION: commented out
     }
   }
 

@@ -1,12 +1,15 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnDestroy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../services/api.service';
 import { ConfigService } from '../services/config.service';
 import { ToastService } from '../services/toast.service';
 import { LoggerService } from '../services/logger.service';
+import { AuthService } from '../services/auth.service';
 import { AlertComponent } from '../alert/alert';
+import type { CardData } from '../embed';
 import { Turn } from '../turn';
 
 export interface Chat {
@@ -16,9 +19,70 @@ export interface Chat {
   updated_at: Date;
 }
 
+export interface ViewInfo {
+  view_name: string;
+  display_name: string;
+  column_count: number;
+  has_labels: boolean;
+  source_type?: 'form_view' | 'worksheet_view' | 'scoresheet_view' | 'other_view';
+  form_group?: string;
+  version?: string;
+  versions?: { table_name: string; version: number }[];
+  is_empty?: boolean;
+}
+
+export interface CoreField {
+  name: string;
+  label: string;
+  type: 'text' | 'number' | 'date';
+  default_selected: boolean;
+}
+
+export interface ModelProposal {
+  name: string;
+  description: string;
+  sql: string;
+  valid: boolean;
+  error?: string | null;
+  source_view: string;
+  columns: string[];
+  excluded_columns: string[];
+  preview_data?: CardData | null;  // Real columns + 1 sample row from Metabase (null when SQL invalid)
+  sqlExpanded: boolean;  // local UI state
+}
+
+export interface CreatedModel {
+  name: string;
+  description: string;
+  card_id: number;
+  metabase_url: string;
+}
+
+export interface ModelError {
+  name: string;
+  error: string;
+}
+
+export interface ExistingModelSummary {
+  card_id: number;
+  name: string;
+  description: string;
+}
+
+export interface ExistingModelDetail extends ExistingModelSummary {
+  sql: string;
+  columns: string[];
+  previewData?: CardData | null;
+  previewLoading?: boolean;
+}
+
+export type ModelsModalStep = 'idle' | 'pick-mode' | 'loading-views' | 'pick-view'
+  | 'loading-models' | 'pick-existing-model' | 'edit-existing'
+  | 'generating' | 'review' | 'creating' | 'done';
+
 @Component({
   selector: 'app-sidebar',
-  imports: [FormsModule, AlertComponent],
+  imports: [FormsModule, RouterLink, AlertComponent],
   templateUrl: './sidebar.html',
   styleUrls: ['./sidebar.css']
 })
@@ -65,7 +129,7 @@ export class SidebarComponent implements OnDestroy {
     document.removeEventListener('mousemove', this.onMouseMove);
     document.removeEventListener('mouseup', this.onMouseUp);
   }
-  
+
   // Alert state
   showDeleteAlert: boolean = false;
   chatToDelete: Chat | null = null;
@@ -82,8 +146,14 @@ export class SidebarComponent implements OnDestroy {
     private readonly configService: ConfigService,
     private readonly toastService: ToastService,
     private readonly logger: LoggerService,
+    private readonly authService: AuthService,
     private readonly cdr: ChangeDetectorRef
   ) {}
+
+  /** Whether to show the "Generate Data Models" entry point (Create/Edit Data Model permission). */
+  get canEditDataModel(): boolean {
+    return this.authService.canEditDataModel();
+  }
 
   async ngOnInit(): Promise<void> {
     await this.loadChats();

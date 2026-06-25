@@ -3,6 +3,8 @@ Database module for managing PostgreSQL connections and operations.
 """
 import psycopg
 import logging
+import zlib
+from contextlib import contextmanager
 from typing import Any, List, Dict, Optional
 import json
 from config import config
@@ -99,6 +101,35 @@ class DatabaseManager:
                         ON query_cache(tenant_id, db_id, schema_fingerprint);
                 """)
 
+                # Schema version tracking — drives conditional semantic-cache invalidation.
+                # One row per (db_id, collection_name) holds the structural fingerprint of
+                # the embedded schema; embed_schemas compares + purges on change.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS schema_versions (
+                        db_id           INTEGER NOT NULL,
+                        collection_name TEXT    NOT NULL,
+                        fingerprint     TEXT    NOT NULL,
+                        updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (db_id, collection_name)
+                    );
+                """)
+
+                # One-time migration: pre-fix cache rows pre-date the structural fingerprint
+                # and may encode SQL against a since-changed schema. Purge them once on
+                # first init after the fix lands; guarded by a sentinel row in
+                # schema_versions so it never repeats.
+                cur.execute("""
+                    INSERT INTO schema_versions (db_id, collection_name, fingerprint)
+                    VALUES (0, '__migration_v1__', 'done')
+                    ON CONFLICT (db_id, collection_name) DO NOTHING
+                    RETURNING db_id
+                """)
+                if cur.fetchone():
+                    cur.execute("DELETE FROM query_cache")
+                    logger.info(
+                        f"One-time cache migration: purged {cur.rowcount} pre-fix query_cache entries"
+                    )
+
                 # ivfflat index requires rows to exist first — created separately via evict_old
                 # or on first similarity search. Skip here to avoid error on empty table.
 
@@ -107,7 +138,7 @@ class DatabaseManager:
     def purge_embeddings(self, db_id: Optional[int] = None, collection_name: str = "embedded_schema"):
         """
         Delete existing embeddings from the vector store.
-        
+
         Args:
             db_id: Optional database ID to filter by
             collection_name: Name of the collection to purge
@@ -144,8 +175,83 @@ class DatabaseManager:
                     conn.commit()
                     logger.info(f"Purged {deleted_count} existing embeddings")
         except Exception as e:
-            logger.error(f"Error purging embeddings: {e}", exc_info=True)
+            logger.exception(f"Error purging embeddings: {e}")
             raise
+
+    def get_embedding_ids(self, db_id: int,
+                          collection_name: str = "embedded_schema") -> List[str]:
+        """Return the ids of all embeddings for a given (db_id, collection_name).
+
+        Used by embed_schemas to capture the existing row set before adding
+        fresh embeddings, so the old rows can be deleted *after* the new ones
+        are inserted (atomic-ish swap — the running app always sees a complete
+        embedding set).
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id FROM langchain_pg_embedding
+                    WHERE collection_id IN (
+                        SELECT uuid FROM langchain_pg_collection
+                        WHERE name = %s
+                    )
+                    AND cmetadata->>'db_id' = %s
+                """, (collection_name, str(db_id)))
+                return [str(row[0]) for row in cur.fetchall()]
+
+    def purge_embeddings_by_ids(self, ids: List[str],
+                                collection_name: str = "embedded_schema") -> int:
+        """Delete embeddings with the given ids (scoped to a collection for safety).
+
+        Returns the number of rows actually deleted. No-op if `ids` is empty.
+        """
+        if not ids:
+            return 0
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DELETE FROM langchain_pg_embedding
+                    WHERE id = ANY(%s)
+                    AND collection_id IN (
+                        SELECT uuid FROM langchain_pg_collection
+                        WHERE name = %s
+                    )
+                """, (ids, collection_name))
+                deleted = cur.rowcount
+                conn.commit()
+                logger.info(f"Purged {deleted} stale embeddings by id")
+                return deleted
+
+    @contextmanager
+    def embed_lock(self, db_id: int, collection_name: str = "embedded_schema"):
+        """Advisory lock serializing the embed swap per (db_id, collection_name).
+
+        Stops two overlapping embed runs from racing the add-then-delete swap
+        and leaving duplicate embeddings. Yields True if the caller owns the
+        swap, or False if another run holds it (caller should skip). Released on
+        exit, or when the connection closes if unlock is skipped.
+        """
+        # Two int4 keys: a namespace from the collection name + the db_id.
+        # crc32 is unsigned; shift into Postgres's signed int4 range.
+        key1 = zlib.crc32(collection_name.encode("utf-8")) - 2**31
+        key2 = db_id
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_try_advisory_lock(%s, %s)", (key1, key2))
+                acquired = cur.fetchone()[0]
+            conn.commit()
+            if not acquired:
+                yield False
+                return
+            try:
+                yield True
+            finally:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(%s, %s)", (key1, key2))
+                conn.commit()
+        finally:
+            conn.close()
 
 
 class ChatRepository:
@@ -584,6 +690,75 @@ class CacheRepository:
                 deleted = cur.rowcount
                 conn.commit()
                 return deleted
+
+    def get_schema_fingerprint(self, db_id: int,
+                               collection_name: str) -> Optional[str]:
+        """Return the stored structural fingerprint for (db_id, collection_name), or None.
+
+        Used by the fingerprint-first fast-path in embed_schemas to skip the
+        full re-embed (sample fetches + Azure embedding calls + DB writes)
+        when the schema hasn't structurally changed since the last run.
+        """
+        with self.db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT fingerprint FROM schema_versions "
+                    "WHERE db_id = %s AND collection_name = %s",
+                    (db_id, collection_name),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+
+    def update_schema_fingerprint(self, db_id: int, collection_name: str,
+                                  fingerprint: str) -> int:
+        """Compare new structural fingerprint to the stored one for (db_id, collection_name).
+        If it differs, purge that db's query_cache. Always upsert the new fingerprint.
+
+        SELECT ... FOR UPDATE serializes against a concurrent embed-all run
+        (e.g. manual CLI vs. server startup).
+
+        Returns the number of query_cache rows purged (0 on first run or unchanged).
+        """
+        with self.db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT fingerprint FROM schema_versions "
+                    "WHERE db_id = %s AND collection_name = %s FOR UPDATE",
+                    (db_id, collection_name),
+                )
+                row = cur.fetchone()
+                old = row[0] if row else None
+
+                purged = 0
+                # Only purge when we had a previous fingerprint and it differs.
+                # First-ever embed (old=None) has nothing valid to invalidate.
+                if old is not None and old != fingerprint:
+                    cur.execute("DELETE FROM query_cache WHERE db_id = %s", (db_id,))
+                    purged = cur.rowcount
+
+                cur.execute("""
+                    INSERT INTO schema_versions (db_id, collection_name, fingerprint, updated_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (db_id, collection_name)
+                    DO UPDATE SET fingerprint = EXCLUDED.fingerprint, updated_at = NOW()
+                """, (db_id, collection_name, fingerprint))
+
+                conn.commit()
+
+                if old is None:
+                    logger.info(
+                        f"Schema fingerprint initialized for db_id={db_id}: {fingerprint}"
+                    )
+                elif old == fingerprint:
+                    logger.info(
+                        f"Schema unchanged for db_id={db_id} (fingerprint={fingerprint}); cache retained"
+                    )
+                else:
+                    logger.info(
+                        f"Schema changed for db_id={db_id}; "
+                        f"purged {purged} stale cache entries (old={old} new={fingerprint})"
+                    )
+                return purged
 
     def ensure_hnsw_index(self):
         """Create the hnsw index once the table has rows. hnsw supports up to 16000 dimensions,

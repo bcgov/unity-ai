@@ -142,6 +142,60 @@ export class ApiService {
     });
   }
 
+  // Data model methods
+  getDataModelViews<T>(): Observable<T> {
+    return this.post<T>('/data-models/views', {});
+  }
+
+  getDataModelCoreFields<T>(): Observable<T> {
+    return this.post<T>('/data-models/core-fields', {});
+  }
+
+  previewDataModel<T>(viewName: string, coreFields?: string[], selectedVersions?: string[]): Observable<T> {
+    return this.post<T>('/data-models/preview', {
+      view_name: viewName,
+      core_fields: coreFields,
+      selected_versions: selectedVersions,
+    });
+  }
+
+  previewCombinedModel<T>(viewNames: string[], coreFields?: string[]): Observable<T> {
+    return this.post<T>('/data-models/preview', {
+      view_names: viewNames,
+      core_fields: coreFields,
+    });
+  }
+
+  createDataModels<T>(models: { name: string; description: string; sql: string }[]): Observable<T> {
+    return this.post<T>('/data-models/create', { models });
+  }
+
+  listDataModels<T>(): Observable<T> {
+    return this.post<T>('/data-models/list', {});
+  }
+
+  getDataModelDetail<T>(cardId: number): Observable<T> {
+    return this.post<T>('/data-models/detail', { card_id: cardId });
+  }
+
+  getDataModelPreviewData<T>(cardId: number): Observable<T> {
+    return this.post<T>('/data-models/preview-data', { card_id: cardId });
+  }
+
+  modifyDataModelPreview<T>(
+    cardId: number,
+    prompt: string,
+    viewNames: string[],
+    coreFields?: string[],
+  ): Observable<T> {
+    return this.post<T>('/data-models/modify-preview', {
+      card_id: cardId,
+      prompt,
+      view_names: viewNames,
+      core_fields: coreFields,
+    });
+  }
+
   // Chat-related methods
   getChats<T>(): Observable<T> {
     return this.post<T>('/chats', {});

@@ -1,41 +1,21 @@
 # Unity AI - Platform
 
-AI-powered  
+[![Lifecycle:Stable](https://img.shields.io/badge/Lifecycle-Stable-97ca00)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+
+OpenAI-powered  
 
 - Reporting system that converts natural language questions into SQL queries with Metabase integration.
 - Application assessment system allowing for autonomous background application review and scoring.
 
-## Quick Start
+## Directory Structure
 
-1. **Navigate to applications directory:**
-```bash
-cd applications
-```
-
-2. **Configure environment:**
-```bash
-cp .env.example .env
-# Edit .env with your Azure OpenAI, JWT, and Metabase credentials
-```
-
-3. **Start the application:**
-```bash
-docker-compose up --build
-```
-
-4. **Access the application:**
-   - Application: http://localhost
-   - Testing with JWT: http://localhost/?token=YOUR_JWT_TOKEN
-
-## Architecture
-
-**Single Combined Container**: Flask serves both the Angular frontend (static files) and backend API endpoints.
-
-```
-Browser (localhost:80) → Flask (container port 8080)
-                          ├── /api/* → Backend API
-                          └── /*     → Angular static files
-```
+    .github/workflows/           - CI/CD pipelines
+    applications/                - Application root (frontend, backend, Docker)
+    documentation/                - Project documentation
+    COMPLIANCE.yaml               - BCGov PIA/STRA compliance status
+    CONTRIBUTING.md               - How to contribute
+    LICENSE                       - License
+    SECURITY.md                   - Security Policy and Reporting
 
 ## Key Features
 
@@ -47,38 +27,20 @@ Browser (localhost:80) → Flask (container port 8080)
 - **Multi-tenant**: Configurable database mappings and tenant isolation
 - **Vector Search**: PostgreSQL with pgvector for intelligent schema embeddings
 
-## Project Structure
-
-```
-unity-ai/
-├── applications/
-│   ├── Unity.AI.Reporting.Backend/    # Flask API + AI SQL generation
-│   ├── Unity.AI.Reporting.Frontend/   # Angular chat interface
-│   ├── Dockerfile                     # Combined frontend+backend build
-│   ├── docker-compose.yml             # Local development setup
-│   ├── .env.example                   # Configuration template
-│   └── README.md                      # Deployment guide
-├── documentation/                      # Project documentation
-└── .github/workflows/                 # CI/CD pipelines
-```
-
 ## Documentation
 
 - [Applications README](./applications/README.md) - Detailed setup and deployment
+- [Quick Start & Architecture](./documentation/unity-ai-reporting-quick-start.md) - Local setup and container architecture
 - [Environment Configuration](./documentation/unity-ai-reporting-environment-specific-configuration.md) - Environment variables guide
 - [Manual Deployment Guide](./documentation/manual-image-build-push-openshift.md) - OpenShift deployment
 
-## Tech Stack
+## Technology
 
-- **Frontend**: Angular 21, TypeScript 5.9, Vitest 4
-- **Backend**: Flask 3.1 (Python 3.13), Azure OpenAI, LangChain, pgvector
-- **Database**: PostgreSQL 17 with pgvector extension
+- **Frontend**: Angular, TypeScript, Vitest
+- **Backend**: Flask (Python), Azure OpenAI, LangChain, pgvector
+- **Database**: PostgreSQL with pgvector extension
 - **Container**: Docker (multi-stage build, OpenShift compatible)
 
 ## License
 
 Licensed under the MIT License. See [LICENSE](./LICENSE) for details.
-
-## Contributing
-
-This is a BC Government project. For questions or issues, please contact the development team.

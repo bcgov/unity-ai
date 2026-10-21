@@ -1,8 +1,28 @@
 # Unity AI - Platform
 
-[![Lifecycle:Stable](https://img.shields.io/badge/Lifecycle-Stable-97ca00)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+[![Lifecycle:Dormant](https://img.shields.io/badge/Lifecycle-Dormant-ff7f2a)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+[![BC Gov Repo](https://img.shields.io/badge/BC_Gov-Unity_AI-blue)](https://github.com/bcgov/Unity/tree/main/applications/Unity.AI)
 
-OpenAI-powered  
+> This repository has been archived and is read-only. Unity AI has moved into the Unity monorepo at
+> [`bcgov/Unity/applications/Unity.AI`](https://github.com/bcgov/Unity/tree/main/applications/Unity.AI),
+> where development, pull requests and CI/CD continue. Commit history was carried over, and this
+> repository is kept for reference and historical purposes.
+
+## Where Things Moved
+
+| This repository                  | Unity monorepo                                     |
+|----------------------------------|----------------------------------------------------|
+| `applications/`                  | `applications/Unity.AI/`                           |
+| `documentation/`                 | `applications/Unity.AI/documentation/`             |
+| `.github/workflows/*.yml`        | `.github/workflows/*-ai.yml`                       |
+| SonarCloud `bcgov_unity-ai`      | Unity's combined SonarCloud project                |
+| Issues and pull requests         | [bcgov/Unity issues](https://github.com/bcgov/Unity/issues) |
+
+The container images (`<env>-unity-ai-reporting`) and OpenShift statefulsets are unchanged; only the source and pipelines moved.
+
+## Overview
+
+OpenAI-powered
 
 - Reporting system that converts natural language questions into SQL queries with Metabase integration.
 - Application assessment system allowing for autonomous background application review and scoring.

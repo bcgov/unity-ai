@@ -1,5 +1,9 @@
 # Unity AI Applications - Deployment Guide
 
+> [!IMPORTANT]
+> Archived. The current version of this guide lives at
+> [`bcgov/Unity/applications/Unity.AI`](https://github.com/bcgov/Unity/tree/main/applications/Unity.AI).
+
 This directory contains the Unity AI Reporting platform with combined frontend and backend deployment.
 
 ## Architecture

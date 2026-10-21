@@ -1,19 +1,8 @@
 name: Main - Build & Push docker images
 
+# Automatic push deploys removed: Unity AI now builds and deploys from bcgov/Unity (applications/Unity.AI).
+# Manual dispatch is kept only as a fallback until this repository is archived.
 on:
-  push:
-    branches: [ "main" ]
-    paths-ignore:
-      - '.github/**'
-      - '.gitignore'
-      - 'documentation/**'
-      - 'CODE_OF_CONDUCT.md'
-      - 'COMPLIANCE.yaml'
-      - 'CONTRIBUTING.md'
-      - 'LICENSE'
-      - 'README.md'
-      - 'SECURITY.md'
-      - 'CLAUDE.md'
   # Allow manual workflow triggering
   workflow_dispatch:
 # Workflow dependencies
